@@ -51,6 +51,7 @@ header h1{margin:0 18px 0 0;font-size:28px;color:var(--acc);white-space:nowrap}
     <button class="btn" data-nav id="bFav">★ Favoritos</button>
     <button class="btn" data-nav id="bReload">⟳</button>
   </header>
+  <div id="dbg" style="position:fixed;right:12px;bottom:8px;color:#556;font-size:14px;z-index:50"></div>
   <div id="status">Cargando la lista más reciente de GitHub (iptv-org)…</div>
   <div id="grid"></div>
 </div>
@@ -75,7 +76,7 @@ header h1{margin:0 18px 0 0;font-size:28px;color:var(--acc);white-space:nowrap}
 var API='https://iptv-org.github.io/api/';
 var M3U='https://iptv-org.github.io/iptv/index.m3u';
 /* En una web https el navegador bloquea señales http; dentro de las apps (Fire TV / Samsung) se permiten todas */
-var VERSION='2026.11.07c';
+var VERSION='2026.11.07d';
 var PAGE=60, HTTPS_ONLY=location.protocol==='https:'&&!window.TV_APP&&!/[?&]app=1/.test(location.search);
 /* Canales que siempre aparecen primero */
 var FEATURED=[/^caracol tv/i,/^canal rcn/i,/^caracol internacional/i,/^canal 1$/i,/^se[ñn]al colombia/i,/^citytv/i,/^canal capital/i,/^teleantioquia/i,/^telecaf/i,/^telecaribe/i,/^telepac/i];
@@ -85,6 +86,7 @@ var st={country:'',cat:'',fav:false,q:''};
 var watch=null,favs=load('favs',{}),hls=null,cur=-1,srcIdx=0,osdTimer=null,scope='main';
 var $=function(id){return document.getElementById(id)};
 
+function dbg(t){try{document.getElementById('dbg').textContent=t}catch(e){}}
 function load(k,d){try{return JSON.parse(localStorage.getItem('tv_'+k))||d}catch(e){return d}}
 function save(k,v){try{localStorage.setItem('tv_'+k,JSON.stringify(v))}catch(e){}}
 function getJSON(u){return fetch(u,{cache:'no-cache'}).then(function(r){if(!r.ok)throw r.status;return r.json()})}
@@ -196,7 +198,7 @@ function catItems(){
 }
 
 /* ---------- Reproductor ---------- */
-var openedAt=0,lastKey=0;
+var openedAt=0,lastKey=0,lastOk=0;
 function play(i,s){
   if(i<0)i=view.length-1;if(i>=view.length)i=0;
   var c=view[i];if(!c)return;cur=i;srcIdx=s||0;
@@ -286,7 +288,8 @@ window.tvBack=back;
 var KEYS={37:'l',38:'u',39:'r',40:'d',13:'ok',10009:'back',27:'back',8:'back',4:'back',427:'chup',428:'chdn',33:'chup',34:'chdn',403:'fav',415:'ok',179:'ok'};
 try{if(window.tizen&&tizen.tvinputdevice)['ChannelUp','ChannelDown','ColorF0Red','MediaPlayPause','MediaPlay'].forEach(function(k){try{tizen.tvinputdevice.registerKey(k)}catch(e){}})}catch(e){}
 document.addEventListener('keydown',function(e){
-  var k=KEYS[e.keyCode]||(e.key==='Enter'?'ok':null);if(!k)return;
+  dbg('tecla '+e.keyCode+(e.key?' '+e.key:''));
+  var k=KEYS[e.keyCode]||(e.key==='Enter'||e.key==='Accept'||e.keyCode===65376||e.keyCode===29443?'ok':null);if(!k)return;
   lastKey=Date.now();
   if(e.repeat&&(k==='ok'||k==='back')){e.preventDefault();return}
   if(k==='ok'&&Date.now()-openedAt<900){e.preventDefault();return}
@@ -305,12 +308,18 @@ document.addEventListener('keydown',function(e){
     showOSD();
   }
   if(k==='back')return back();
-  if(k==='ok')return activate(focused);
+  if(k==='ok'){lastOk=Date.now();return activate(focused)}
   if(k==='fav'&&focused&&focused.classList.contains('card')){toggleFav(view[+focused.getAttribute('data-i')]);var i=+focused.getAttribute('data-i');apply();return}
   if(k==='l'||k==='r'||k==='u'||k==='d')move(k);
 });
 /* Solo clics reales de mouse/táctil (los TV generan clics falsos al pulsar OK) */
-document.addEventListener('click',function(e){if(!e.detail||Date.now()-lastKey<1000)return;var el=e.target.closest&&e.target.closest('[data-nav]');if(el){focus(el);activate(el)}});
+document.addEventListener('click',function(e){
+  dbg('clic '+(e.target&&(e.target.id||e.target.className||e.target.tagName)));
+  if(Date.now()-lastOk<700||Date.now()-openedAt<900)return;  /* ya se manejó con la tecla OK */
+  var el=e.target.closest&&e.target.closest('[data-nav]');
+  if(!el&&!e.detail)el=focused;                                 /* clic generado por el control remoto */
+  if(el){focus(el);activate(el)}});
+document.addEventListener('keyup',function(e){if((e.keyCode===13||e.key==='Enter')&&Date.now()-lastOk>700&&Date.now()-openedAt>900&&scope!=='player'){dbg('ok por keyup');lastOk=Date.now();activate(focused)}});
 window.onerror=function(m){try{if(scope==='player')msg('Error: '+m);else $('status').textContent='Error: '+m}catch(x){}};
 $('player').addEventListener('mousemove',function(){if(scope==='player')showOSD()});
 var t;$('q').addEventListener('input',function(){clearTimeout(t);t=setTimeout(function(){st.q=$('q').value;apply()},350)});
