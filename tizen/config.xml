@@ -4,7 +4,7 @@
     <tizen:application id="CafeTV0001.CafeTV" package="CafeTV0001" required_version="3.0"/>
     <name>CaféTV</name>
     <icon src="icon.png"/>
-    <content src="index.html"/>
+    <content src="start.html"/>
     <feature name="http://tizen.org/feature/screen.size.all"/>
     <access origin="*" subdomains="true"/>
     <tizen:allow-navigation>*</tizen:allow-navigation>
