@@ -36,7 +36,7 @@ header h1{margin:0 18px 0 0;font-size:28px;color:var(--acc);white-space:nowrap}
 #osd .t{flex:1}
 #osd .t b{font-size:30px;display:block}
 #osd .t span{color:var(--mut);font-size:18px}
-#msg{position:absolute;top:40%;left:0;right:0;text-align:center;font-size:26px;color:var(--mut);pointer-events:none}
+#msg{position:absolute;top:38%;left:10%;right:10%;text-align:center;font-size:34px;color:#fff;text-shadow:0 2px 6px #000;pointer-events:none}
 .hide{opacity:0;pointer-events:none}
 </style>
 </head>
@@ -75,7 +75,7 @@ header h1{margin:0 18px 0 0;font-size:28px;color:var(--acc);white-space:nowrap}
 var API='https://iptv-org.github.io/api/';
 var M3U='https://iptv-org.github.io/iptv/index.m3u';
 /* En una web https el navegador bloquea señales http; dentro de las apps (Fire TV / Samsung) se permiten todas */
-var VERSION='2026.11.07b';
+var VERSION='2026.11.07c';
 var PAGE=60, HTTPS_ONLY=location.protocol==='https:'&&!window.TV_APP&&!/[?&]app=1/.test(location.search);
 /* Canales que siempre aparecen primero */
 var FEATURED=[/^caracol tv/i,/^canal rcn/i,/^caracol internacional/i,/^canal 1$/i,/^se[ñn]al colombia/i,/^citytv/i,/^canal capital/i,/^teleantioquia/i,/^telecaf/i,/^telecaribe/i,/^telepac/i];
@@ -196,10 +196,12 @@ function catItems(){
 }
 
 /* ---------- Reproductor ---------- */
+var openedAt=0,lastKey=0;
 function play(i,s){
   if(i<0)i=view.length-1;if(i>=view.length)i=0;
   var c=view[i];if(!c)return;cur=i;srcIdx=s||0;
   var st_=c.streams[srcIdx],v=$('video');
+  if(scope!=='player')openedAt=Date.now();
   $('player').style.display='block';scope='player';
   $('oLogo').src=c.logo||'';$('oName').textContent=c.name;
   $('oInfo').textContent=(countries[c.country]||c.country||'')+' · Fuente '+(srcIdx+1)+' de '+c.streams.length+(st_.q?' · '+st_.q:'')+' · ▲▼ cambiar canal';
@@ -217,7 +219,7 @@ function play(i,s){
     hls.on(Hls.Events.ERROR,function(e,d){
       if(!d.fatal)return;
       if(d.type===Hls.ErrorTypes.MEDIA_ERROR&&!recovered){recovered=true;hls.recoverMediaError();return}
-      fail()});
+      msg('Fuente '+(srcIdx+1)+' no responde ('+(d.details||d.type)+')');fail()});
     hls.loadSource(st_.url);hls.attachMedia(v);
   }else{v.src=st_.url}
   v.play().catch(function(){});
@@ -225,14 +227,14 @@ function play(i,s){
 function fail(){
   clearTimeout(watch);if($('player').style.display!=='block')return;
   var c=view[cur];
-  if(c&&srcIdx<c.streams.length-1){msg('Probando otra fuente…');play(cur,srcIdx+1)}
+  if(c&&srcIdx<c.streams.length-1){msg('Probando fuente '+(srcIdx+2)+' de '+c.streams.length+'…');play(cur,srcIdx+1)}
   else msg('Este canal no está disponible ahora. Usa ▲▼ para cambiar.');
 }
 function msg(t){$('msg').textContent=t||''}
 function stop(){clearTimeout(watch);if(hls){hls.destroy();hls=null}var v=$('video');v.pause();v.removeAttribute('src');v.load();
   $('player').style.display='none';scope='main';
   var el=document.querySelector('.card[data-i="'+cur+'"]');focus(el||$('q'));if(el)el.scrollIntoView({block:'center'})}
-function showOSD(){$('osd').classList.remove('hide');focus($('oClose'));clearTimeout(osdTimer);osdTimer=setTimeout(function(){$('osd').classList.add('hide')},5000)}
+function showOSD(){$('osd').classList.remove('hide');if(!focused||!$('osd').contains(focused))focus($('oSrc'));clearTimeout(osdTimer);osdTimer=setTimeout(function(){$('osd').classList.add('hide')},5000)}
 function toggleFav(c){if(favs[c.id])delete favs[c.id];else favs[c.id]=1;save('favs',favs)}
 $('video').addEventListener('playing',function(){msg('');clearTimeout(watch)});
 $('video').addEventListener('waiting',function(){if(scope==='player')msg('Almacenando búfer…')});
@@ -284,7 +286,10 @@ window.tvBack=back;
 var KEYS={37:'l',38:'u',39:'r',40:'d',13:'ok',10009:'back',27:'back',8:'back',4:'back',427:'chup',428:'chdn',33:'chup',34:'chdn',403:'fav',415:'ok',179:'ok'};
 try{if(window.tizen&&tizen.tvinputdevice)['ChannelUp','ChannelDown','ColorF0Red','MediaPlayPause','MediaPlay'].forEach(function(k){try{tizen.tvinputdevice.registerKey(k)}catch(e){}})}catch(e){}
 document.addEventListener('keydown',function(e){
-  var k=KEYS[e.keyCode];if(!k)return;
+  var k=KEYS[e.keyCode]||(e.key==='Enter'?'ok':null);if(!k)return;
+  lastKey=Date.now();
+  if(e.repeat&&(k==='ok'||k==='back')){e.preventDefault();return}
+  if(k==='ok'&&Date.now()-openedAt<900){e.preventDefault();return}
   var typing=document.activeElement&&document.activeElement.tagName==='INPUT';
   if(typing){var inp=document.activeElement,pos=inp.selectionStart,len=inp.value.length;
     if(k==='back'&&e.keyCode===8)return;
@@ -304,7 +309,9 @@ document.addEventListener('keydown',function(e){
   if(k==='fav'&&focused&&focused.classList.contains('card')){toggleFav(view[+focused.getAttribute('data-i')]);var i=+focused.getAttribute('data-i');apply();return}
   if(k==='l'||k==='r'||k==='u'||k==='d')move(k);
 });
-document.addEventListener('click',function(e){var el=e.target.closest('[data-nav]');if(el){focus(el);activate(el)}});
+/* Solo clics reales de mouse/táctil (los TV generan clics falsos al pulsar OK) */
+document.addEventListener('click',function(e){if(!e.detail||Date.now()-lastKey<1000)return;var el=e.target.closest&&e.target.closest('[data-nav]');if(el){focus(el);activate(el)}});
+window.onerror=function(m){try{if(scope==='player')msg('Error: '+m);else $('status').textContent='Error: '+m}catch(x){}};
 $('player').addEventListener('mousemove',function(){if(scope==='player')showOSD()});
 var t;$('q').addEventListener('input',function(){clearTimeout(t);t=setTimeout(function(){st.q=$('q').value;apply()},350)});
 $('grid').addEventListener('scroll',function(){var g=$('grid');if(g.scrollTop+g.clientHeight>g.scrollHeight-300&&shown<view.length)more()});
