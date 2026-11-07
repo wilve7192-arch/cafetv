@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CaféTV – TV en vivo</title>
+<style>
+:root{--bg:#0d0f14;--panel:#171a22;--card:#1f2330;--txt:#eef1f7;--mut:#9aa3b5;--acc:#f0a23b;--foc:#ffffff}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;overflow:hidden}
+#app{display:flex;flex-direction:column;height:100%}
+header{display:flex;align-items:center;gap:14px;padding:18px 3vw;background:var(--panel)}
+header h1{margin:0 18px 0 0;font-size:28px;color:var(--acc);white-space:nowrap}
+.btn,.inp{background:var(--card);color:var(--txt);border:3px solid transparent;border-radius:12px;padding:12px 20px;font-size:20px;outline:none;cursor:pointer;white-space:nowrap}
+.inp{flex:1;min-width:120px}
+.btn.on{background:var(--acc);color:#111}
+.focus{border-color:var(--foc)!important;transform:scale(1.06);box-shadow:0 0 0 4px rgba(240,162,59,.55)}
+#status{padding:8px 3vw;color:var(--mut);font-size:18px}
+#grid{flex:1;overflow-y:auto;padding:10px 3vw 40px;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:22px;align-content:start}
+.card{background:var(--card);border:3px solid transparent;border-radius:16px;padding:14px;display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer;transition:transform .12s;position:relative}
+.card img{width:150px;height:84px;object-fit:contain}
+.card .ph{width:150px;height:84px;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:700;color:var(--acc)}
+.card .nm{font-size:18px;text-align:center;line-height:1.2;max-height:2.4em;overflow:hidden}
+.card .ct{font-size:14px;color:var(--mut)}
+.card .fav{position:absolute;top:8px;right:12px;color:var(--acc);font-size:22px}
+#more{grid-column:1/-1;justify-self:center}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:20}
+.modal .box{background:var(--panel);border-radius:18px;padding:24px;width:min(560px,90vw);max-height:86vh;display:flex;flex-direction:column;gap:12px}
+.modal h2{margin:0;font-size:26px}
+.modal .list{overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:6px}
+.modal .list .btn{text-align:left}
+#player{position:fixed;inset:0;background:#000;display:none;z-index:30}
+#player video{width:100%;height:100%;background:#000}
+#osd{position:absolute;left:0;right:0;bottom:0;padding:28px 4vw;background:linear-gradient(transparent,rgba(0,0,0,.92));display:flex;align-items:center;gap:20px;transition:opacity .3s}
+#osd img{width:120px;height:68px;object-fit:contain}
+#osd .t{flex:1}
+#osd .t b{font-size:30px;display:block}
+#osd .t span{color:var(--mut);font-size:18px}
+#msg{position:absolute;top:40%;left:0;right:0;text-align:center;font-size:26px;color:var(--mut);pointer-events:none}
+.hide{opacity:0;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>📺 CaféTV</h1>
+    <input id="q" class="inp" data-nav placeholder="Buscar canal…" autocomplete="off">
+    <button class="btn" data-nav id="bCountry">🌎 País: Todos</button>
+    <button class="btn" data-nav id="bCat">🎬 Categoría: Todas</button>
+    <button class="btn" data-nav id="bFav">★ Favoritos</button>
+    <button class="btn" data-nav id="bReload">⟳</button>
+  </header>
+  <div id="status">Cargando la lista más reciente de GitHub (iptv-org)…</div>
+  <div id="grid"></div>
+</div>
+
+<div class="modal" id="modal"><div class="box"><h2 id="mTitle"></h2><div class="list" id="mList"></div></div></div>
+
+<div id="player">
+  <video id="video" autoplay playsinline></video>
+  <div id="msg"></div>
+  <div id="osd">
+    <img id="oLogo" alt="">
+    <div class="t"><b id="oName"></b><span id="oInfo"></span></div>
+    <button class="btn" data-nav id="oFav">★ Favorito</button>
+    <button class="btn" data-nav id="oSrc">⇄ Otra fuente</button>
+    <button class="btn" data-nav id="oClose">✕ Salir</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
+<script>
+(function(){
+var API='https://iptv-org.github.io/api/';
+var M3U='https://iptv-org.github.io/iptv/index.m3u';
+/* En una web https el navegador bloquea señales http; dentro de las apps (Fire TV / Samsung) se permiten todas */
+var PAGE=60, HTTPS_ONLY=location.protocol==='https:'&&!window.TV_APP;
+var all=[],view=[],shown=0,countries={},cats={};
+var st={country:'',cat:'',fav:false,q:''};
+var favs=load('favs',{}),hls=null,cur=-1,srcIdx=0,osdTimer=null,scope='main';
+var $=function(id){return document.getElementById(id)};
+
+function load(k,d){try{return JSON.parse(localStorage.getItem('tv_'+k))||d}catch(e){return d}}
+function save(k,v){try{localStorage.setItem('tv_'+k,JSON.stringify(v))}catch(e){}}
+function getJSON(u){return fetch(u,{cache:'no-cache'}).then(function(r){if(!r.ok)throw r.status;return r.json()})}
+function okUrl(u){return !HTTPS_ONLY||u.indexOf('https:')===0}
+
+/* ---------- Carga de datos ---------- */
+function loadAPI(){
+  return Promise.all(['channels','streams','logos','countries','categories'].map(function(f){return getJSON(API+f+'.json')}))
+  .then(function(r){
+    var ch={},logos={},out={};
+    r[0].forEach(function(c){ch[c.id]=c});
+    r[2].forEach(function(l){if(!logos[l.channel]||!l.feed)logos[l.channel]=l.url});
+    r[3].forEach(function(c){countries[c.code]=(c.flag?c.flag+' ':'')+c.name});
+    r[4].forEach(function(c){cats[c.id]=c.name});
+    r[1].forEach(function(s){
+      if(!s.url||!okUrl(s.url))return;
+      var c=s.channel&&ch[s.channel];
+      if(c&&(c.is_nsfw||c.closed))return;
+      var key=s.channel||s.title||s.url;
+      var o=out[key];
+      if(!o){o=out[key]={id:key,name:c?c.name:(s.title||'Canal'),logo:(c&&(c.logo||logos[c.id]))||'',country:c?c.country:'',cats:c?(c.categories||[]):[],streams:[]}}
+      o.streams.push({url:s.url,q:s.quality||'',ref:s.referrer||'',ua:s.user_agent||''});
+    });
+    return Object.keys(out).map(function(k){return out[k]});
+  });
+}
+function loadM3U(){
+  return fetch(M3U,{cache:'no-cache'}).then(function(r){return r.text()}).then(function(t){
+    var lines=t.split(/\r?\n/),out={},info=null;
+    lines.forEach(function(l){
+      if(l.indexOf('#EXTINF')===0){
+        var a=function(n){var m=l.match(new RegExp(n+'="([^"]*)"'));return m?m[1]:''};
+        var id=a('tvg-id'),cc=(id.split('@')[0].split('.')[1]||'').toUpperCase();
+        info={id:id,name:l.split(',').pop().replace(/\s*\(\d+p\).*$/,'').trim(),logo:a('tvg-logo'),country:cc,
+              cats:a('group-title').toLowerCase().split(';').filter(function(x){return x&&x!=='undefined'})};
+      }else if(info&&l&&l[0]!=='#'){
+        if(okUrl(l)){var k=(info.id||info.name).split('@')[0];
+          if(!out[k]){out[k]=info;info.streams=[]}
+          out[k].streams.push({url:l.trim(),q:'',ref:'',ua:''});}
+        info=null;
+      }
+    });
+    return Object.keys(out).map(function(k){return out[k]});
+  });
+}
+function start(){
+  $('status').textContent='Cargando la lista más reciente de GitHub (iptv-org)…';
+  loadAPI().catch(function(){return loadM3U()}).then(function(list){
+    list.sort(function(a,b){return a.name.localeCompare(b.name)});
+    all=list;
+    var c=load('filters',null);if(c){st.country=c.country||'';st.cat=c.cat||''}
+    apply();
+  }).catch(function(){$('status').textContent='No se pudo descargar la lista. Revisa la conexión y pulsa ⟳.'});
+}
+
+/* ---------- Lista y filtros ---------- */
+function apply(){
+  var q=st.q.toLowerCase();
+  view=all.filter(function(c){
+    if(st.fav&&!favs[c.id])return false;
+    if(st.country&&c.country!==st.country)return false;
+    if(st.cat&&c.cats.indexOf(st.cat)<0)return false;
+    if(q&&c.name.toLowerCase().indexOf(q)<0)return false;
+    return true;
+  });
+  $('bCountry').textContent='🌎 País: '+(st.country?(countries[st.country]||st.country):'Todos');
+  $('bCat').textContent='🎬 Categoría: '+(st.cat?(cats[st.cat]||st.cat):'Todas');
+  $('bFav').className='btn'+(st.fav?' on':'');
+  $('status').textContent=view.length+' canales · lista actualizada desde github.com/iptv-org/iptv';
+  save('filters',{country:st.country,cat:st.cat});
+  $('grid').innerHTML='';shown=0;more();
+}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function more(){
+  var g=$('grid'),m=$('more');if(m)m.remove();
+  var html='';
+  view.slice(shown,shown+PAGE).forEach(function(c,i){
+    var idx=shown+i;
+    html+='<div class="card" data-nav data-i="'+idx+'">'+(favs[c.id]?'<span class="fav">★</span>':'')+
+      (c.logo?'<img loading="lazy" src="'+esc(c.logo)+'" onerror="this.outerHTML=\'<div class=ph>'+esc(c.name.charAt(0))+'</div>\'">':'<div class="ph">'+esc(c.name.charAt(0))+'</div>')+
+      '<div class="nm">'+esc(c.name)+'</div><div class="ct">'+esc(countries[c.country]||c.country||'')+'</div></div>';
+  });
+  g.insertAdjacentHTML('beforeend',html);
+  shown=Math.min(shown+PAGE,view.length);
+  if(shown<view.length)g.insertAdjacentHTML('beforeend','<button class="btn" data-nav id="more">Ver más canales ('+(view.length-shown)+')</button>');
+}
+
+/* ---------- Selector (país / categoría) ---------- */
+var pick=null;
+function openPicker(title,items,cb){
+  $('mTitle').textContent=title;
+  $('mList').innerHTML=items.map(function(it,i){return '<button class="btn" data-nav data-k="'+i+'">'+esc(it[1])+'</button>'}).join('');
+  pick={items:items,cb:cb};$('modal').style.display='flex';scope='modal';focusFirst();
+}
+function closePicker(){$('modal').style.display='none';pick=null;scope='main';focus($('bCountry'))}
+function countryItems(){
+  var n={};all.forEach(function(c){if(c.country)n[c.country]=(n[c.country]||0)+1});
+  var arr=Object.keys(n).map(function(k){return[k,(countries[k]||k)+' ('+n[k]+')']});
+  arr.sort(function(a,b){return a[1].localeCompare(b[1])});
+  ['CO','MX','AR','ES','US','VE','PE','EC','CL'].reverse().forEach(function(k){var i=arr.findIndex(function(x){return x[0]===k});if(i>0)arr.unshift(arr.splice(i,1)[0])});
+  return[['','Todos los países']].concat(arr);
+}
+function catItems(){
+  var n={};all.forEach(function(c){c.cats.forEach(function(k){n[k]=(n[k]||0)+1})});
+  var arr=Object.keys(n).map(function(k){return[k,(cats[k]||k)+' ('+n[k]+')']});
+  arr.sort(function(a,b){return a[1].localeCompare(b[1])});
+  return[['','Todas las categorías']].concat(arr);
+}
+
+/* ---------- Reproductor ---------- */
+function play(i,s){
+  if(i<0)i=view.length-1;if(i>=view.length)i=0;
+  var c=view[i];if(!c)return;cur=i;srcIdx=s||0;
+  var st_=c.streams[srcIdx],v=$('video');
+  $('player').style.display='block';scope='player';
+  $('oLogo').src=c.logo||'';$('oName').textContent=c.name;
+  $('oInfo').textContent=(countries[c.country]||c.country||'')+' · Fuente '+(srcIdx+1)+' de '+c.streams.length+(st_.q?' · '+st_.q:'')+' · ▲▼ cambiar canal';
+  $('oFav').textContent=favs[c.id]?'★ Quitar favorito':'☆ Favorito';
+  msg('Cargando…');showOSD();save('last',c.id);
+  if(hls){hls.destroy();hls=null}
+  v.removeAttribute('src');
+  if(window.Hls&&Hls.isSupported()){
+    hls=new Hls({manifestLoadingTimeOut:12000});
+    hls.on(Hls.Events.ERROR,function(e,d){if(d.fatal)fail()});
+    hls.loadSource(st_.url);hls.attachMedia(v);
+  }else{v.src=st_.url}
+  v.play().catch(function(){});
+}
+function fail(){
+  var c=view[cur];
+  if(c&&srcIdx<c.streams.length-1){msg('Probando otra fuente…');play(cur,srcIdx+1)}
+  else msg('Este canal no está disponible ahora. Usa ▲▼ para cambiar.');
+}
+function msg(t){$('msg').textContent=t||''}
+function stop(){if(hls){hls.destroy();hls=null}var v=$('video');v.pause();v.removeAttribute('src');v.load();
+  $('player').style.display='none';scope='main';
+  var el=document.querySelector('.card[data-i="'+cur+'"]');focus(el||$('q'));if(el)el.scrollIntoView({block:'center'})}
+function showOSD(){$('osd').classList.remove('hide');focus($('oClose'));clearTimeout(osdTimer);osdTimer=setTimeout(function(){$('osd').classList.add('hide')},5000)}
+function toggleFav(c){if(favs[c.id])delete favs[c.id];else favs[c.id]=1;save('favs',favs)}
+$('video').addEventListener('playing',function(){msg('')});
+$('video').addEventListener('error',fail);
+
+/* ---------- Navegación con control remoto ---------- */
+var focused=null;
+function focus(el){if(!el)return;if(focused)focused.classList.remove('focus');focused=el;el.classList.add('focus');
+  if(el.tagName==='INPUT')el.focus();else{if(document.activeElement&&document.activeElement.blur)document.activeElement.blur()}
+  el.scrollIntoView({block:'nearest',inline:'nearest'})}
+function scopeEl(){return scope==='modal'?$('modal'):scope==='player'?$('osd'):$('app')}
+function focusFirst(){var e=scopeEl().querySelector('[data-nav]');focus(e)}
+function move(dir){
+  var els=[].slice.call(scopeEl().querySelectorAll('[data-nav]'));
+  if(!focused||els.indexOf(focused)<0)return focusFirst();
+  var a=focused.getBoundingClientRect(),ax=a.left+a.width/2,ay=a.top+a.height/2,best=null,bd=1e9;
+  els.forEach(function(e){if(e===focused)return;var b=e.getBoundingClientRect(),bx=b.left+b.width/2,by=b.top+b.height/2,dx=bx-ax,dy=by-ay,d;
+    if(dir==='l'&&dx>=-2)return;if(dir==='r'&&dx<=2)return;if(dir==='u'&&dy>=-2)return;if(dir==='d'&&dy<=2)return;
+    d=(dir==='l'||dir==='r')?Math.abs(dx)+Math.abs(dy)*3:Math.abs(dy)+Math.abs(dx)*0.6;
+    if(d<bd){bd=d;best=e}});
+  if(best){focus(best);if(best.id==='more'){/* auto-cargar */}}
+}
+function activate(el){
+  if(!el)return;
+  if(el.classList.contains('card'))return play(+el.getAttribute('data-i'));
+  if(el.id==='more'){var n=shown;more();focus(document.querySelector('.card[data-i="'+n+'"]'));return}
+  if(scope==='modal'){var it=pick.items[+el.getAttribute('data-k')],cb=pick.cb;closePicker();cb(it[0]);return}
+  switch(el.id){
+    case 'bCountry':return openPicker('Elige un país',countryItems(),function(k){st.country=k;apply()});
+    case 'bCat':return openPicker('Elige una categoría',catItems(),function(k){st.cat=k;apply()});
+    case 'bFav':st.fav=!st.fav;return apply();
+    case 'bReload':return start();
+    case 'oClose':return stop();
+    case 'oSrc':var c=view[cur];return play(cur,(srcIdx+1)%c.streams.length);
+    case 'oFav':toggleFav(view[cur]);$('oFav').textContent=favs[view[cur].id]?'★ Quitar favorito':'☆ Favorito';showOSD();focus($('oFav'));return;
+    case 'q':return el.focus();
+  }
+}
+function back(){
+  if(scope==='modal'){closePicker();return true}
+  if(scope==='player'){if($('osd').classList.contains('hide'))stop();else $('osd').classList.add('hide');return true}
+  if(st.q||st.fav||st.country||st.cat){st.q='';$('q').value='';st.fav=false;st.country='';st.cat='';apply();focus($('q'));return true}
+  try{if(window.tizen){tizen.application.getCurrentApplication().exit();return true}}catch(e){}
+  return false;
+}
+/* Llamado por la app Android (Fire TV) al pulsar Atrás; false = salir de la app */
+window.tvBack=back;
+var KEYS={37:'l',38:'u',39:'r',40:'d',13:'ok',10009:'back',27:'back',8:'back',4:'back',427:'chup',428:'chdn',33:'chup',34:'chdn',403:'fav',415:'ok',179:'ok'};
+try{if(window.tizen&&tizen.tvinputdevice)['ChannelUp','ChannelDown','ColorF0Red','MediaPlayPause','MediaPlay'].forEach(function(k){try{tizen.tvinputdevice.registerKey(k)}catch(e){}})}catch(e){}
+document.addEventListener('keydown',function(e){
+  var k=KEYS[e.keyCode];if(!k)return;
+  var typing=document.activeElement&&document.activeElement.tagName==='INPUT';
+  if(typing){var inp=document.activeElement,pos=inp.selectionStart,len=inp.value.length;
+    if(k==='back'&&e.keyCode===8)return;
+    if(k==='l'&&pos>0)return;
+    if(k==='r'&&pos<len)return;}
+  e.preventDefault();
+  if(scope==='player'){
+    var hidden=$('osd').classList.contains('hide');
+    if(k==='u'||k==='chup'){if(hidden)return play(cur-1)}
+    if(k==='d'||k==='chdn'){if(hidden)return play(cur+1)}
+    if(k==='back')return back();
+    if(hidden){showOSD();return}
+    showOSD();
+  }
+  if(k==='back')return back();
+  if(k==='ok')return activate(focused);
+  if(k==='fav'&&focused&&focused.classList.contains('card')){toggleFav(view[+focused.getAttribute('data-i')]);var i=+focused.getAttribute('data-i');apply();return}
+  if(k==='l'||k==='r'||k==='u'||k==='d')move(k);
+});
+document.addEventListener('click',function(e){var el=e.target.closest('[data-nav]');if(el){focus(el);activate(el)}});
+$('player').addEventListener('mousemove',function(){if(scope==='player')showOSD()});
+var t;$('q').addEventListener('input',function(){clearTimeout(t);t=setTimeout(function(){st.q=$('q').value;apply()},350)});
+$('grid').addEventListener('scroll',function(){var g=$('grid');if(g.scrollTop+g.clientHeight>g.scrollHeight-300&&shown<view.length)more()});
+
+focus($('q'));start();
+})();
+</script>
+</body>
+</html>
