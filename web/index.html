@@ -46,6 +46,7 @@ header h1{margin:0 18px 0 0;font-size:28px;color:var(--acc);white-space:nowrap}
     <h1>📺 CaféTV</h1>
     <input id="q" class="inp" data-nav placeholder="Buscar canal…" autocomplete="off">
     <button class="btn" data-nav id="bCountry">🌎 País: Todos</button>
+    <button class="btn" data-nav id="bSport">⚽ Deportes</button>
     <button class="btn" data-nav id="bCat">🎬 Categoría: Todas</button>
     <button class="btn" data-nav id="bFav">★ Favoritos</button>
     <button class="btn" data-nav id="bReload">⟳</button>
@@ -148,7 +149,8 @@ function apply(){
   $('bCountry').textContent='🌎 País: '+(st.country?(countries[st.country]||st.country):'Todos');
   $('bCat').textContent='🎬 Categoría: '+(st.cat?(cats[st.cat]||st.cat):'Todas');
   $('bFav').className='btn'+(st.fav?' on':'');
-  $('status').textContent=view.length+' canales · lista actualizada desde github.com/iptv-org/iptv';
+  $('bSport').className='btn'+(st.cat==='sports'?' on':'');
+  $('status').textContent=view.length+(view.length===1?' canal':' canales')+(st.cat==='sports'?' de deportes':'')+' · lista actualizada desde github.com/iptv-org/iptv';
   save('filters',{country:st.country,cat:st.cat});
   $('grid').innerHTML='';shown=0;more();
 }
@@ -247,6 +249,7 @@ function activate(el){
   switch(el.id){
     case 'bCountry':return openPicker('Elige un país',countryItems(),function(k){st.country=k;apply()});
     case 'bCat':return openPicker('Elige una categoría',catItems(),function(k){st.cat=k;apply()});
+    case 'bSport':st.cat=(st.cat==='sports'?'':'sports');return apply();
     case 'bFav':st.fav=!st.fav;return apply();
     case 'bReload':return start();
     case 'oClose':return stop();
