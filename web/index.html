@@ -75,10 +75,14 @@ header h1{margin:0 18px 0 0;font-size:28px;color:var(--acc);white-space:nowrap}
 var API='https://iptv-org.github.io/api/';
 var M3U='https://iptv-org.github.io/iptv/index.m3u';
 /* En una web https el navegador bloquea señales http; dentro de las apps (Fire TV / Samsung) se permiten todas */
-var PAGE=60, HTTPS_ONLY=location.protocol==='https:'&&!window.TV_APP;
+var VERSION='2026.11.07b';
+var PAGE=60, HTTPS_ONLY=location.protocol==='https:'&&!window.TV_APP&&!/[?&]app=1/.test(location.search);
+/* Canales que siempre aparecen primero */
+var FEATURED=[/^caracol tv/i,/^canal rcn/i,/^caracol internacional/i,/^canal 1$/i,/^se[ñn]al colombia/i,/^citytv/i,/^canal capital/i,/^teleantioquia/i,/^telecaf/i,/^telecaribe/i,/^telepac/i];
+function rank(c){for(var i=0;i<FEATURED.length;i++)if(FEATURED[i].test(c.name)&&(!c.country||c.country==='CO'))return i;return 99}
 var all=[],view=[],shown=0,countries={},cats={};
 var st={country:'',cat:'',fav:false,q:''};
-var favs=load('favs',{}),hls=null,cur=-1,srcIdx=0,osdTimer=null,scope='main';
+var watch=null,favs=load('favs',{}),hls=null,cur=-1,srcIdx=0,osdTimer=null,scope='main';
 var $=function(id){return document.getElementById(id)};
 
 function load(k,d){try{return JSON.parse(localStorage.getItem('tv_'+k))||d}catch(e){return d}}
@@ -129,7 +133,7 @@ function loadM3U(){
 function start(){
   $('status').textContent='Cargando la lista más reciente de GitHub (iptv-org)…';
   loadAPI().catch(function(){return loadM3U()}).then(function(list){
-    list.sort(function(a,b){return a.name.localeCompare(b.name)});
+    list.sort(function(a,b){return (rank(a)-rank(b))||a.name.localeCompare(b.name)});
     all=list;
     var c=load('filters',null);if(c){st.country=c.country||'';st.cat=c.cat||''}
     apply();
@@ -150,7 +154,7 @@ function apply(){
   $('bCat').textContent='🎬 Categoría: '+(st.cat?(cats[st.cat]||st.cat):'Todas');
   $('bFav').className='btn'+(st.fav?' on':'');
   $('bSport').className='btn'+(st.cat==='sports'?' on':'');
-  $('status').textContent=view.length+(view.length===1?' canal':' canales')+(st.cat==='sports'?' de deportes':'')+' · lista actualizada desde github.com/iptv-org/iptv';
+  $('status').textContent=view.length+(view.length===1?' canal':' canales')+(st.cat==='sports'?' de deportes':'')+' · lista actualizada desde github.com/iptv-org/iptv · v'+VERSION;
   save('filters',{country:st.country,cat:st.cat});
   $('grid').innerHTML='';shown=0;more();
 }
@@ -201,27 +205,37 @@ function play(i,s){
   $('oInfo').textContent=(countries[c.country]||c.country||'')+' · Fuente '+(srcIdx+1)+' de '+c.streams.length+(st_.q?' · '+st_.q:'')+' · ▲▼ cambiar canal';
   $('oFav').textContent=favs[c.id]?'★ Quitar favorito':'☆ Favorito';
   msg('Cargando…');showOSD();save('last',c.id);
+  clearTimeout(watch);watch=setTimeout(function(){if(v.readyState<3)fail()},30000);
   if(hls){hls.destroy();hls=null}
   v.removeAttribute('src');
   if(window.Hls&&Hls.isSupported()){
-    hls=new Hls({manifestLoadingTimeOut:12000});
-    hls.on(Hls.Events.ERROR,function(e,d){if(d.fatal)fail()});
+    /* Búfer de 20 s: se reproduce 20 s detrás del directo para absorber cortes de la señal */
+    hls=new Hls({liveSyncDuration:20,liveMaxLatencyDuration:45,maxBufferLength:40,maxMaxBufferLength:60,
+      backBufferLength:30,manifestLoadingTimeOut:15000,manifestLoadingMaxRetry:3,levelLoadingMaxRetry:4,
+      fragLoadingMaxRetry:6,fragLoadingRetryDelay:1000,startFragPrefetch:true});
+    var recovered=false;
+    hls.on(Hls.Events.ERROR,function(e,d){
+      if(!d.fatal)return;
+      if(d.type===Hls.ErrorTypes.MEDIA_ERROR&&!recovered){recovered=true;hls.recoverMediaError();return}
+      fail()});
     hls.loadSource(st_.url);hls.attachMedia(v);
   }else{v.src=st_.url}
   v.play().catch(function(){});
 }
 function fail(){
+  clearTimeout(watch);if($('player').style.display!=='block')return;
   var c=view[cur];
   if(c&&srcIdx<c.streams.length-1){msg('Probando otra fuente…');play(cur,srcIdx+1)}
   else msg('Este canal no está disponible ahora. Usa ▲▼ para cambiar.');
 }
 function msg(t){$('msg').textContent=t||''}
-function stop(){if(hls){hls.destroy();hls=null}var v=$('video');v.pause();v.removeAttribute('src');v.load();
+function stop(){clearTimeout(watch);if(hls){hls.destroy();hls=null}var v=$('video');v.pause();v.removeAttribute('src');v.load();
   $('player').style.display='none';scope='main';
   var el=document.querySelector('.card[data-i="'+cur+'"]');focus(el||$('q'));if(el)el.scrollIntoView({block:'center'})}
 function showOSD(){$('osd').classList.remove('hide');focus($('oClose'));clearTimeout(osdTimer);osdTimer=setTimeout(function(){$('osd').classList.add('hide')},5000)}
 function toggleFav(c){if(favs[c.id])delete favs[c.id];else favs[c.id]=1;save('favs',favs)}
-$('video').addEventListener('playing',function(){msg('')});
+$('video').addEventListener('playing',function(){msg('');clearTimeout(watch)});
+$('video').addEventListener('waiting',function(){if(scope==='player')msg('Almacenando búfer…')});
 $('video').addEventListener('error',fail);
 
 /* ---------- Navegación con control remoto ---------- */

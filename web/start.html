@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CaféTV</title>
+<style>html,body{margin:0;height:100%;background:#0d0f14;color:#9aa3b5;font:26px system-ui,sans-serif;display:flex;align-items:center;justify-content:center}</style>
+</head><body>📺 Cargando CaféTV…
+<script>
+/* Cargador: descarga la última versión de la app desde GitHub Pages.
+   Si no hay internet usa la última versión guardada, o la copia incluida en el APK. */
+(function(){
+  var REMOTA='https://wilve7192-arch.github.io/cafetv/web/index.html';
+  var listo=false,t=setTimeout(local,10000);
+  function mostrar(h){listo=true;clearTimeout(t);window.TV_APP=true;document.open();document.write(h);document.close()}
+  function local(){if(listo)return;var c=null;try{c=localStorage.getItem('tv_app_cache')}catch(e){}
+    if(c){mostrar(c)}else{listo=true;location.replace('index.html')}}
+  fetch(REMOTA+'?t='+Date.now(),{cache:'no-store'}).then(function(r){if(!r.ok)throw r.status;return r.text()})
+  .then(function(h){if(listo)return;if(h.indexOf('CaféTV')<0)throw 'html';try{localStorage.setItem('tv_app_cache',h)}catch(e){}mostrar(h)})
+  .catch(local);
+})();
+</script></body></html>
