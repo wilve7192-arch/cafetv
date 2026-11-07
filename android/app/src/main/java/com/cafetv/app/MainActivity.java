@@ -33,7 +33,7 @@ public class MainActivity extends Activity {
         web.setFocusableInTouchMode(true);
         setContentView(web);
         web.requestFocus(View.FOCUS_DOWN);
-        web.loadUrl("file:///android_asset/index.html");
+        web.loadUrl("file:///android_asset/start.html");
     }
 
     // Botón Atrás del control: lo maneja la app web; si ya está en el inicio, se cierra.
