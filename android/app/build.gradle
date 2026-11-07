@@ -1,0 +1,24 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.cafetv.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.cafetv.app'
+        minSdk 22
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+    }
+    // La interfaz es la misma página web de la carpeta /web
+    sourceSets { main { assets.srcDirs = ['../../web'] } }
+
+    buildTypes {
+        release { minifyEnabled false }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
