@@ -24,13 +24,13 @@ header h1{margin:0 18px 0 0;font-size:28px;color:var(--acc);white-space:nowrap}
 .card .ct{font-size:14px;color:var(--mut)}
 .card .fav{position:absolute;top:8px;right:12px;color:var(--acc);font-size:22px}
 #more{grid-column:1/-1;justify-self:center}
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:20}
+.modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:20}
 .modal .box{background:var(--panel);border-radius:18px;padding:24px;width:min(560px,90vw);max-height:86vh;display:flex;flex-direction:column;gap:12px}
 .modal h2{margin:0;font-size:26px}
 .modal .list{overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:6px}
 .modal .list .btn{text-align:left}
-#player{position:fixed;inset:0;background:#000;display:none;z-index:30}
-#player video{width:100%;height:100%;background:#000}
+#player{position:fixed;top:0;left:0;right:0;bottom:0;background:#000;display:none;z-index:30}
+#player video{position:absolute;top:0;left:0;width:100%;height:100%;background:#000;object-fit:contain}
 #osd{position:absolute;left:0;right:0;bottom:0;padding:28px 4vw;background:linear-gradient(transparent,rgba(0,0,0,.92));display:flex;align-items:center;gap:20px;transition:opacity .3s}
 #osd img{width:120px;height:68px;object-fit:contain}
 #osd .t{flex:1}
@@ -76,7 +76,7 @@ header h1{margin:0 18px 0 0;font-size:28px;color:var(--acc);white-space:nowrap}
 var API='https://iptv-org.github.io/api/';
 var M3U='https://iptv-org.github.io/iptv/index.m3u';
 /* En una web https el navegador bloquea señales http; dentro de las apps (Fire TV / Samsung) se permiten todas */
-var VERSION='2026.11.07d';
+var VERSION='2026.11.07e';
 var PAGE=60, HTTPS_ONLY=location.protocol==='https:'&&!window.TV_APP&&!/[?&]app=1/.test(location.search);
 /* Canales que siempre aparecen primero */
 var FEATURED=[/^caracol tv/i,/^canal rcn/i,/^caracol internacional/i,/^canal 1$/i,/^se[ñn]al colombia/i,/^citytv/i,/^canal capital/i,/^teleantioquia/i,/^telecaf/i,/^telecaribe/i,/^telepac/i];
