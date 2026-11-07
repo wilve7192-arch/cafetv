@@ -2,7 +2,7 @@
 <widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets"
         id="http://cafetv.app/tv" version="1.0.0" viewmodes="maximized">
     <tizen:application id="CafeTV0001.CafeTV" package="CafeTV0001" required_version="3.0"/>
-    <name>CaféTV</name>
+    <name>CafeTV</name>
     <icon src="icon.png"/>
     <content src="start.html"/>
     <feature name="http://tizen.org/feature/screen.size.all"/>
