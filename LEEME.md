@@ -45,3 +45,10 @@ Si cambias `web/index.html`, cópialo también a `tizen/index.html`.
 - Flechas + OK: navegar · Atrás: volver / salir
 - Viendo un canal: ▲▼ o CH+/CH− cambian de canal · OK muestra el menú
   (Favorito, Otra fuente, Salir) · Botón rojo en la lista: marcar favorito
+
+## Actualizaciones automáticas
+La app instalada (Fire TV y Samsung) abre `start.html`, que descarga la última
+versión de `web/index.html` desde https://wilve7192-arch.github.io/cafetv/web/ .
+Para cambiar la app basta con modificar `web/index.html` en GitHub: en unos
+minutos todos los TV la reciben al abrir CaféTV. Sin internet usa la última
+versión guardada. Solo hay que reinstalar si cambia el código Android/Tizen.
