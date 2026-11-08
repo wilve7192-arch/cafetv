@@ -83,13 +83,13 @@ header>*{margin-right:14px}
 var API='https://iptv-org.github.io/api/';
 var M3U='https://iptv-org.github.io/iptv/index.m3u';
 /* En una web https el navegador bloquea señales http; dentro de las apps (Fire TV / Samsung) se permiten todas */
-var VERSION='2026.11.08b';
+var VERSION='2026.11.08c';
 var PAGE=60, HTTPS_ONLY=location.protocol==='https:'&&!window.TV_APP&&!/[?&]app=1/.test(location.search);
 /* Canales que siempre aparecen primero */
 var FEATURED=[/^caracol tv/i,/^canal rcn/i,/^caracol internacional/i,/^canal 1$/i,/^se[ñn]al colombia/i,/^citytv/i,/^canal capital/i,/^teleantioquia/i,/^telecaf/i,/^telecaribe/i,/^telepac/i];
 function rank(c){for(var i=0;i<FEATURED.length;i++)if(FEATURED[i].test(c.name)&&(!c.country||c.country==='CO'))return i;return 99}
 var all=[],view=[],shown=0,countries={},cats={};
-var st={country:'',cat:'',fav:false,q:''};
+var st={country:'',cat:'',fav:false,q:'',mine:true},mine={},mineN=0;
 var noVid=null,watch=null,favs=load('favs',{}),hls=null,cur=-1,srcIdx=0,osdTimer=null,scope='main';
 var $=function(id){return document.getElementById(id)};
 
@@ -101,20 +101,21 @@ function okUrl(u){return !HTTPS_ONLY||u.indexOf('https:')===0}
 
 /* ---------- Carga de datos ---------- */
 function loadAPI(){
-  return Promise.all(['channels','streams','logos','countries','categories'].map(function(f){return getJSON(API+f+'.json')}))
+  return Promise.all(['channels','streams','logos','countries','categories','feeds'].map(function(f){return getJSON(API+f+'.json').catch(function(e){if(f==='feeds')return [];throw e})}))
   .then(function(r){
     var ch={},logos={},out={};
     r[0].forEach(function(c){ch[c.id]=c});
     r[2].forEach(function(l){if(!logos[l.channel]||!l.feed)logos[l.channel]=l.url});
     r[3].forEach(function(c){countries[c.code]=(c.flag?c.flag+' ':'')+c.name});
     r[4].forEach(function(c){cats[c.id]=c.name});
+    var lang={};r[5].forEach(function(f){(f.languages||[]).forEach(function(l){(lang[f.channel]=lang[f.channel]||[]).push(l)})});
     r[1].forEach(function(s){
       if(!s.url||!okUrl(s.url))return;
       var c=s.channel&&ch[s.channel];
       if(c&&(c.is_nsfw||c.closed))return;
       var key=s.channel||s.title||s.url;
       var o=out[key];
-      if(!o){o=out[key]={id:key,name:c?c.name:(s.title||'Canal'),logo:(c&&(c.logo||logos[c.id]))||'',country:c?c.country:'',cats:c?(c.categories||[]):[],streams:[]}}
+      if(!o){o=out[key]={id:key,name:c?c.name:(s.title||'Canal'),logo:(c&&(c.logo||logos[c.id]))||'',country:c?c.country:'',cats:c?(c.categories||[]):[],lang:c?lang[c.id]:undefined,streams:[]}}
       o.streams.push({url:s.url,q:s.quality||'',ref:s.referrer||'',ua:s.user_agent||''});
     });
     return Object.keys(out).map(function(k){return out[k]});
@@ -143,8 +144,8 @@ function start(){
   $('status').textContent='Cargando la lista más reciente de GitHub (iptv-org)…';
   loadAPI().catch(function(){return loadM3U()}).then(function(list){
     list.sort(function(a,b){return (rank(a)-rank(b))||a.name.localeCompare(b.name)});
-    all=list;
-    var c=load('filters',null);if(c){st.country=c.country||'';st.cat=c.cat||''}
+    all=list;mine=curate(list);mineN=Object.keys(mine).length;
+    var c=load('filters',null);if(c){st.country=c.country||'';st.cat=c.cat||'';if(c.mine===false)st.mine=false}
     apply();
   }).catch(function(){$('status').textContent='No se pudo descargar la lista. Revisa la conexión y pulsa ⟳.'});
 }
@@ -156,13 +157,13 @@ var CAT_ES={general:'📺 General',news:'📰 Noticias',sports:'⚽ Deportes',mo
   travel:'✈️ Viajes',animation:'🐭 Animación',classic:'📼 Clásicos',business:'💼 Economía',auto:'🚗 Motor',
   outdoor:'🏕️ Aire libre',science:'🔬 Ciencia',weather:'🌦️ Clima',shop:'🛍️ Compras',family:'👪 Familia',
   legislative:'🏛️ Gobierno',relax:'🌿 Relax',public:'📡 Públicos',interactive:'🕹️ Interactivos'};
-var CHIPS=['','CO','sports','news','movies','series','kids','music','entertainment','documentary','comedy','cooking','religious'];
+var CHIPS=['mine','','CO','sports','news','movies','series','kids','music','entertainment','documentary','comedy','cooking','religious'];
 function catName(k){return CAT_ES[k]||cats[k]||k}
 function renderChips(){
   var html='';
   CHIPS.forEach(function(k){
-    var on=k===''?(!st.cat&&!st.fav&&st.country!=='CO'):k==='CO'?st.country==='CO':st.cat===k;
-    var label=k===''?'📺 Todos':k==='CO'?'🇨🇴 Colombia':catName(k);
+    var on=k==='mine'?st.mine:k===''?!st.mine:k==='CO'?st.country==='CO':st.cat===k;
+    var label=k==='mine'?'🎯 Mi lista ('+mineN+')':k===''?'🌍 Todos ('+all.length+')':k==='CO'?'🇨🇴 Colombia':catName(k);
     html+='<button class="btn chip'+(on?' on':'')+'" data-nav data-chip="'+k+'">'+esc(label)+'</button>';
   });
   html+='<button class="btn chip" data-nav data-chip="*">➕ Más categorías</button>';
@@ -171,11 +172,35 @@ function renderChips(){
   if(fe!==null&&fe!==undefined){var n=$('chips').querySelector('[data-chip="'+fe+'"]');if(n)focus(n)}
 }
 
+/* ---------- Mi lista: selección personalizada (~300 canales en español) ---------- */
+var HIS=['CO','MX','AR','CL','PE','VE','EC','BO','PY','UY','CR','PA','DO','GT','HN','SV','NI','CU','PR','ES'];
+var PRIO={CO:9,MX:7,ES:7,US:6,AR:6,CL:5,PE:5,VE:4,EC:4,PR:3,DO:3,CR:3,PA:3,UY:3,GT:2,HN:2,SV:2,BO:2,PY:2,NI:2,CU:2,DE:5,FR:5,UK:4};
+var NOCAT=['religious','shop','legislative','xxx'];
+/* Canales de pago: no se incluyen en Mi lista */
+var PAGO=/(espn|dsports|directv|bein|fox sports|fox deportes|win sports|win\+|tnt|hbo|cinemax|star channel|star\+|disney|golf channel|eurosport|msg|tyc sports|l1 max|bicolor|universal|warner|axn|sony|amc|cinecanal|paramount|discovery|nat ?geo|national geographic|history|a&e|lifetime|cartoon|nickelodeon|nick jr|comedy central|mtv|tlc|animal planet|golden|de pel[ií]cula|tooncast|cartoonito|baby ?tv|tudn|gol ?tv|movistar|dazn|sky sports|fubo)/i;
+var QUOTA={sports:45,news:30,movies:35,series:20,kids:25,animation:10,music:20,entertainment:30,documentary:15,comedy:8,
+  cooking:4,lifestyle:6,travel:6,classic:6,science:4,auto:4,outdoor:4,culture:8};
+var BIG=/^(telemundo|univisi[oó]n|unim[aá]s|las estrellas|canal 5|azteca (uno|7)|imagen (tv|televisi[oó]n)|la ?1|la ?2|antena 3|cuatro|telecinco|la ?sexta|telefe|el ?trece|am[eé]rica tv|tv p[uú]blica|chilevisi[oó]n|mega|canal 13|tvn|latina( tv)?|panamericana|atv|venevisi[oó]n|televen|globovisi[oó]n|ecuavisa|teleamazonas|tc televisi[oó]n|unitel|red uno|estrella tv|telesistema|nu9ve|tve internacional|24h|canal 24 horas|telemicro|antena latina)( hd| internacional)?$/i;
+function isSpanish(c){return c.lang?c.lang.indexOf('spa')>=0:HIS.indexOf(c.country)>=0}
+function score(c){var h=0;for(var i=0;i<c.streams.length;i++)if(c.streams[i].url.indexOf('https')===0){h=3;break}
+  return (PRIO[c.country]||1)*10+Math.min(c.streams.length,10)+h+(c.logo?2:0)}
+function curate(list){
+  var pick={},sp=list.filter(function(c){return isSpanish(c)&&!PAGO.test(c.name)&&!c.cats.some(function(k){return NOCAT.indexOf(k)>=0})});
+  sp.forEach(function(c){if(c.country==='CO'||BIG.test(c.name))pick[c.id]=1});
+  Object.keys(QUOTA).forEach(function(cat){
+    sp.filter(function(c){return !pick[c.id]&&c.cats.indexOf(cat)>=0})
+      .sort(function(a,b){return score(b)-score(a)}).slice(0,QUOTA[cat])
+      .forEach(function(c){pick[c.id]=1});
+  });
+  return pick;
+}
+
 /* ---------- Lista y filtros ---------- */
 function apply(){
   var q=st.q.toLowerCase();
   view=all.filter(function(c){
     if(st.fav&&!favs[c.id])return false;
+    if(st.mine&&!st.fav&&!st.q&&!mine[c.id]&&!favs[c.id])return false;
     if(st.country&&c.country!==st.country)return false;
     if(st.cat&&c.cats.indexOf(st.cat)<0)return false;
     if(q&&c.name.toLowerCase().indexOf(q)<0)return false;
@@ -184,8 +209,8 @@ function apply(){
   $('bCountry').textContent='🌎 País: '+(st.country?(countries[st.country]||st.country):'Todos');
   $('bCat').textContent='🎬 Categoría: '+(st.cat?catName(st.cat):'Todas');
   $('bFav').className='btn'+(st.fav?' on':'');
-  $('status').textContent=view.length+(view.length===1?' canal':' canales')+(st.cat?' · '+catName(st.cat):'')+' · lista actualizada desde github.com/iptv-org/iptv · v'+VERSION;
-  save('filters',{country:st.country,cat:st.cat});
+  $('status').textContent=view.length+(view.length===1?' canal':' canales')+(st.mine?' en Mi lista':' en total')+(st.cat?' · '+catName(st.cat):'')+' · lista actualizada desde github.com/iptv-org/iptv · v'+VERSION;
+  save('filters',{country:st.country,cat:st.cat,mine:st.mine});
   renderChips();
   $('grid').innerHTML='';shown=0;more();
 }
@@ -337,7 +362,8 @@ function activate(el){
   if(el.id==='more'){var n=shown;more();focus(document.querySelector('.card[data-i="'+n+'"]'));return}
   if(el.hasAttribute&&el.hasAttribute('data-chip')){var k=el.getAttribute('data-chip');
     if(k==='*')return openPicker('Elige una categoría',catItems(),function(x){st.cat=x;apply()});
-    if(k===''){st.cat='';st.fav=false;st.country=''}
+    if(k==='mine'){st.mine=true;st.cat='';st.fav=false;st.country=''}
+    else if(k===''){st.mine=false;st.cat='';st.fav=false;st.country=''}
     else if(k==='CO')st.country=(st.country==='CO'?'':'CO');
     else st.cat=(st.cat===k?'':k);
     return apply()}
