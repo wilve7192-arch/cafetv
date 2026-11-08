@@ -1,0 +1,31 @@
+name: Comprobar canales de CaféTV
+
+on:
+  schedule:
+    - cron: '41 9 * * *'   # todos los días (4:41 a. m. hora Colombia)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Comprobar señales
+        run: |
+          mkdir -p status
+          python3 scripts/check.py status/status.json
+      - name: Guardar resultado
+        run: |
+          git config user.name "cafetv-bot"
+          git config user.email "cafetv-bot@users.noreply.github.com"
+          git add status/status.json
+          git commit -m "Comprobación de canales" || echo "sin cambios"
+          git pull --rebase
+          git push
