@@ -38,6 +38,8 @@ header h1{margin:0 18px 0 0;font-size:28px;color:var(--acc);white-space:nowrap}
 #osd .t span{color:var(--mut);font-size:18px}
 #msg{position:absolute;top:38%;left:10%;right:10%;text-align:center;font-size:34px;color:#fff;text-shadow:0 2px 6px #000;pointer-events:none}
 .hide{opacity:0;pointer-events:none}
+#ban{position:absolute;top:30px;left:40px;background:rgba(0,0,0,.72);padding:14px 26px;border-radius:14px;font-size:30px;transition:opacity .3s;border-left:6px solid var(--acc)}
+#ban small{display:block;font-size:18px;color:var(--mut);margin-top:4px}
 </style>
 </head>
 <body>
@@ -61,6 +63,7 @@ header h1{margin:0 18px 0 0;font-size:28px;color:var(--acc);white-space:nowrap}
 <div id="player">
   <video id="video" autoplay playsinline></video>
   <div id="msg"></div>
+  <div id="ban" class="hide"></div>
   <div id="osd">
     <img id="oLogo" alt="">
     <div class="t"><b id="oName"></b><span id="oInfo"></span></div>
@@ -76,7 +79,7 @@ header h1{margin:0 18px 0 0;font-size:28px;color:var(--acc);white-space:nowrap}
 var API='https://iptv-org.github.io/api/';
 var M3U='https://iptv-org.github.io/iptv/index.m3u';
 /* En una web https el navegador bloquea señales http; dentro de las apps (Fire TV / Samsung) se permiten todas */
-var VERSION='2026.11.07e';
+var VERSION='2026.11.08';
 var PAGE=60, HTTPS_ONLY=location.protocol==='https:'&&!window.TV_APP&&!/[?&]app=1/.test(location.search);
 /* Canales que siempre aparecen primero */
 var FEATURED=[/^caracol tv/i,/^canal rcn/i,/^caracol internacional/i,/^canal 1$/i,/^se[ñn]al colombia/i,/^citytv/i,/^canal capital/i,/^teleantioquia/i,/^telecaf/i,/^telecaribe/i,/^telepac/i];
@@ -208,13 +211,13 @@ function play(i,s){
   $('oLogo').src=c.logo||'';$('oName').textContent=c.name;
   $('oInfo').textContent=(countries[c.country]||c.country||'')+' · Fuente '+(srcIdx+1)+' de '+c.streams.length+(st_.q?' · '+st_.q:'')+' · ▲▼ cambiar canal';
   $('oFav').textContent=favs[c.id]?'★ Quitar favorito':'☆ Favorito';
-  msg('Cargando…');showOSD();save('last',c.id);
+  msg('');banner(i);$('osd').classList.add('hide');save('last',c.id);
   clearTimeout(watch);watch=setTimeout(function(){if(v.readyState<3)fail()},30000);
   if(hls){hls.destroy();hls=null}
   v.removeAttribute('src');
   if(window.Hls&&Hls.isSupported()){
-    /* Búfer de 20 s: se reproduce 20 s detrás del directo para absorber cortes de la señal */
-    hls=new Hls({liveSyncDuration:20,liveMaxLatencyDuration:45,maxBufferLength:40,maxMaxBufferLength:60,
+    /* Arranque rápido (cerca del directo) y búfer que crece hasta 30 s mientras se ve */
+    hls=new Hls({liveSyncDurationCount:3,maxBufferLength:30,maxMaxBufferLength:60,
       backBufferLength:30,manifestLoadingTimeOut:15000,manifestLoadingMaxRetry:3,levelLoadingMaxRetry:4,
       fragLoadingMaxRetry:6,fragLoadingRetryDelay:1000,startFragPrefetch:true});
     var recovered=false;
@@ -233,13 +236,25 @@ function fail(){
   else msg('Este canal no está disponible ahora. Usa ▲▼ para cambiar.');
 }
 function msg(t){$('msg').textContent=t||''}
-function stop(){clearTimeout(watch);if(hls){hls.destroy();hls=null}var v=$('video');v.pause();v.removeAttribute('src');v.load();
+function stop(){clearTimeout(watch);clearTimeout(zapT);zapI=-1;$('ban').classList.add('hide');if(hls){hls.destroy();hls=null}var v=$('video');v.pause();v.removeAttribute('src');v.load();
   $('player').style.display='none';scope='main';
   var el=document.querySelector('.card[data-i="'+cur+'"]');focus(el||$('q'));if(el)el.scrollIntoView({block:'center'})}
 function showOSD(){$('osd').classList.remove('hide');if(!focused||!$('osd').contains(focused))focus($('oSrc'));clearTimeout(osdTimer);osdTimer=setTimeout(function(){$('osd').classList.add('hide')},5000)}
 function toggleFav(c){if(favs[c.id])delete favs[c.id];else favs[c.id]=1;save('favs',favs)}
 $('video').addEventListener('playing',function(){msg('');clearTimeout(watch)});
-$('video').addEventListener('waiting',function(){if(scope==='player')msg('Almacenando búfer…')});
+/* Solo avisa si la señal se detiene más de 3 s */
+var stallT=null;
+$('video').addEventListener('waiting',function(){clearTimeout(stallT);stallT=setTimeout(function(){if(scope==='player')msg('Cargando…')},3000)});
+$('video').addEventListener('timeupdate',function(){clearTimeout(stallT);if($('msg').textContent==='Cargando…')msg('')});
+/* Cartel con el nombre del canal (arriba a la izquierda) */
+var banT=null;
+function banner(i){var c=view[i];if(!c)return;var b=$('ban');
+  b.innerHTML=esc(c.name)+'<small>'+(i+1)+' de '+view.length+' · ▲▼ cambiar canal · OK menú</small>';
+  b.classList.remove('hide');clearTimeout(banT);banT=setTimeout(function(){b.classList.add('hide')},3500)}
+/* Zapping: muestra el nombre al instante y cambia cuando dejas de pulsar */
+var zapI=-1,zapT=null;
+function zap(d){var n=view.length;if(!n)return;zapI=((zapI<0?cur:zapI)+d+n)%n;banner(zapI);
+  clearTimeout(zapT);zapT=setTimeout(function(){var i=zapI;zapI=-1;play(i)},450)}
 $('video').addEventListener('error',fail);
 
 /* ---------- Navegación con control remoto ---------- */
@@ -301,11 +316,12 @@ document.addEventListener('keydown',function(e){
   e.preventDefault();
   if(scope==='player'){
     var hidden=$('osd').classList.contains('hide');
-    if(k==='u'||k==='chup'){if(hidden)return play(cur-1)}
-    if(k==='d'||k==='chdn'){if(hidden)return play(cur+1)}
+    if(k==='u'||k==='chup')return zap(-1);
+    if(k==='d'||k==='chdn')return zap(1);
     if(k==='back')return back();
-    if(hidden){showOSD();return}
+    if(hidden){if(k==='ok')showOSD();return}
     showOSD();
+    if(k==='l'||k==='r')return move(k);
   }
   if(k==='back')return back();
   if(k==='ok'){lastOk=Date.now();return activate(focused)}
