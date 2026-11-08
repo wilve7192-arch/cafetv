@@ -92,7 +92,7 @@ header>*{margin-right:14px}
 var API='https://iptv-org.github.io/api/';
 var M3U='https://iptv-org.github.io/iptv/index.m3u';
 /* En una web https el navegador bloquea señales http; dentro de las apps (Fire TV / Samsung) se permiten todas */
-var VERSION='2026.11.09c';
+var VERSION='2026.11.10';
 var PAGE=60, HTTPS_ONLY=location.protocol==='https:'&&!window.TV_APP&&!/[?&]app=1/.test(location.search);
 /* Canales que siempre aparecen primero */
 var FEATURED=[/^caracol tv/i,/^canal rcn/i,/^caracol internacional/i,/^canal 1$/i,/^se[ñn]al colombia/i,/^citytv/i,/^canal capital/i,/^teleantioquia/i,/^telecaf/i,/^telecaribe/i,/^telepac/i];
@@ -160,13 +160,13 @@ function start(){
 }
 
 /* ---------- Categorías por tipo ---------- */
-var CAT_ES={cine_en:'🎥 Cine en inglés',general:'📺 General',news:'📰 Noticias',sports:'⚽ Deportes',movies:'🎬 Películas',series:'🎞️ Series',
+var CAT_ES={general:'📺 General',news:'📰 Noticias',sports:'⚽ Deportes',movies:'🎬 Películas',series:'🎞️ Series',
   music:'🎵 Música',kids:'🧸 Infantil',entertainment:'🎭 Entretenimiento',documentary:'🦁 Documentales',comedy:'😂 Comedia',
   cooking:'🍳 Cocina',religious:'⛪ Religiosos',culture:'🎨 Cultura',education:'📚 Educación',lifestyle:'✨ Estilo de vida',
   travel:'✈️ Viajes',animation:'🐭 Animación',classic:'📼 Clásicos',business:'💼 Economía',auto:'🚗 Motor',
   outdoor:'🏕️ Aire libre',science:'🔬 Ciencia',weather:'🌦️ Clima',shop:'🛍️ Compras',family:'👪 Familia',
   legislative:'🏛️ Gobierno',relax:'🌿 Relax',public:'📡 Públicos',interactive:'🕹️ Interactivos'};
-var CHIPS=['mine','CO','sports','news','movies','cine_en','series','kids','music','entertainment','documentary','comedy','cooking'];
+var CHIPS=['mine','CO','sports','news','movies','series','kids','music','entertainment','documentary','comedy','cooking'];
 function catName(k){return CAT_ES[k]||cats[k]||k}
 function renderChips(){
   var html='';
@@ -191,6 +191,9 @@ var PAGO=/(espn|dsports|directv|bein|fox sports|fox deportes|win sports|win\+|tn
 var REGIONAL=/(canarias|catalu|m[aá]laga|andaluc|galicia|valencia|murcia|euskadi|asturias|arag[oó]n|baleares|extremadura|navarra|rioja|castilla|cantabria|sevilla|granada|alicante|tenerife)/i;
 /* ✏️ Personalización: canales agregados o quitados a pedido (por id de iptv-org o por nombre) */
 var AGREGAR=[];
+/* Infantiles que se conservan */
+var INFANTIL=['Bob Esponja','Bob Esponja Pantalones Cuadrados','Pluto TV Kids','Pluto TV Junior','Pluto TV Kids Classics','Pluto TV Toons',
+  'Clan','Doraemon','El Chavo TV','Avatar: La Leyenda de Aang','Hey Arnold!','Rugrats','Mr Bean Animated','Detective Conan'];
 var QUITAR=[];
 var QUOTA={sports:45,news:30,movies:200,series:200,kids:25,animation:10,music:20,entertainment:30,documentary:15,comedy:8,
   cooking:4,lifestyle:6,travel:6,classic:6,science:4,auto:4,outdoor:4,culture:8};
@@ -201,12 +204,18 @@ function score(c){var h=0;for(var i=0;i<c.streams.length;i++)if(c.streams[i].url
 function curate(list){
   var pick={},sp=list.filter(function(c){return isSpanish(c)&&!PAGO.test(c.name)&&!(c.country!=='CO'&&REGIONAL.test(c.name))&&!c.cats.some(function(k){return NOCAT.indexOf(k)>=0})});
   sp.forEach(function(c){if(c.country==='CO'||BIG.test(c.name)||/(cine|pel[ií]cula|movie|film|cinema|novela)/i.test(c.name))pick[c.id]=1});
-  /* Cine en inglés gratuito (categoría aparte) */
-  list.forEach(function(c){if(!pick[c.id]&&c.lang&&c.lang.indexOf('eng')>=0&&c.lang.indexOf('spa')<0&&c.cats.indexOf('movies')>=0&&!PAGO.test(c.name)){pick[c.id]=1;c.en=true}});
+
   Object.keys(QUOTA).forEach(function(cat){
     sp.filter(function(c){return !pick[c.id]&&c.cats.indexOf(cat)>=0})
       .sort(function(a,b){return score(b)-score(a)}).slice(0,QUOTA[cat])
       .forEach(function(c){pick[c.id]=1});
+  });
+  /* Noticias: solo las de Colombia. Infantil: solo los más conocidos */
+  var kidSeen={};
+  list.forEach(function(c){if(!pick[c.id])return;
+    if(c.cats.indexOf('news')>=0&&c.country!=='CO')delete pick[c.id];
+    else if(c.cats.indexOf('kids')>=0&&c.country!=='CO'){
+      if(INFANTIL.indexOf(c.name)<0||kidSeen[c.name])delete pick[c.id];else kidSeen[c.name]=1}
   });
   list.forEach(function(c){
     if(AGREGAR.indexOf(c.id)>=0||AGREGAR.indexOf(c.name)>=0)pick[c.id]=1;
@@ -253,8 +262,7 @@ function apply(){
     /* los de Colombia no se ocultan: la comprobación se hace desde EE. UU. y algunos solo funcionan en Colombia */
     if(checked&&c.alive===false&&!favs[c.id]&&c.country!=='CO')return false;
     if(st.country&&c.country!==st.country)return false;
-    if(st.cat==='cine_en'){if(!c.en)return false}
-    else if(st.cat&&(c.cats.indexOf(st.cat)<0||(st.cat==='movies'&&c.en)))return false;
+    if(st.cat&&c.cats.indexOf(st.cat)<0)return false;
     if(q&&c.name.toLowerCase().indexOf(q)<0)return false;
     return true;
   });
