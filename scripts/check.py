@@ -17,27 +17,39 @@ def fetch(url, ua=None, ref=None, limit=200000):
     with urllib.request.urlopen(req, timeout=10) as r:
         return r.geturl(), r.read(limit)
 
+MIN_H = 480  # calidad mínima aceptada (480p)
+
 def check(stream):
+    """Devuelve la altura del video (p. ej. 720) si funciona, -1 si funciona sin dato de calidad, 0 si no sirve."""
     url, ua, ref = stream['url'], stream.get('user_agent'), stream.get('referrer')
+    q = re.match(r'(\d+)', stream.get('quality') or '')
+    height = int(q.group(1)) if q else 0
+    if height and height < MIN_H:
+        return 0
     try:
         base, body = fetch(url, ua, ref)
         text = body.decode('utf-8', 'ignore')
         if '#EXTM3U' not in text:
-            return False
+            return 0
+        res = [int(h) for h in re.findall(r'RESOLUTION=\d+x(\d+)', text)]
+        if res:
+            height = max(res)
+            if height < MIN_H:
+                return 0
         for _ in range(2):  # lista maestra -> variante -> segmento
             lines = [l.strip() for l in text.splitlines() if l.strip() and not l.startswith('#')]
             if not lines:
-                return False
+                return 0
             nxt = urllib.parse.urljoin(base, lines[0])
             if '.m3u8' in nxt.split('?')[0] or 'EXT-X-STREAM-INF' in text:
                 base, body = fetch(nxt, ua, ref)
                 text = body.decode('utf-8', 'ignore')
                 continue
             fetch(nxt, ua, ref, limit=4096)  # el primer segmento responde
-            return True
-        return False
+            return height or -1
+        return 0
     except Exception:
-        return False
+        return 0
 
 def main(out):
     channels = get('channels'); feeds = get('feeds'); streams = get('streams')
@@ -63,9 +75,10 @@ def main(out):
     with ThreadPoolExecutor(64) as ex:
         res = list(ex.map(check, todo))
     ok = sorted({s['url'] for s, r in zip(todo, res) if r})
+    h = {s['url']: r for s, r in zip(todo, res) if r and r > 0}
     alive = {s['channel'] for s, r in zip(todo, res) if r}
     data = {'generated': int(time.time() // 60), 'checked': len(todo), 'channels': len(wanted),
-            'alive_channels': len(alive), 'ok': ok}
+            'alive_channels': len(alive), 'min_quality': MIN_H, 'ok': ok, 'h': h}
     with open(out, 'w', encoding='utf-8') as f:
         json.dump(data, f, separators=(',', ':'))
     print(f'Listo en {int(time.time()-t0)} s: {len(ok)}/{len(todo)} señales y {len(alive)}/{len(wanted)} canales funcionan')
