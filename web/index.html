@@ -92,7 +92,7 @@ header>*{margin-right:14px}
 var API='https://iptv-org.github.io/api/';
 var M3U='https://iptv-org.github.io/iptv/index.m3u';
 /* En una web https el navegador bloquea señales http; dentro de las apps (Fire TV / Samsung) se permiten todas */
-var VERSION='2026.11.09b';
+var VERSION='2026.11.09c';
 var PAGE=60, HTTPS_ONLY=location.protocol==='https:'&&!window.TV_APP&&!/[?&]app=1/.test(location.search);
 /* Canales que siempre aparecen primero */
 var FEATURED=[/^caracol tv/i,/^canal rcn/i,/^caracol internacional/i,/^canal 1$/i,/^se[ñn]al colombia/i,/^citytv/i,/^canal capital/i,/^teleantioquia/i,/^telecaf/i,/^telecaribe/i,/^telepac/i];
@@ -223,7 +223,7 @@ function loadStatus(){getJSON(STATUS_URL+'?t='+Date.now()).then(function(d){
   all.forEach(function(c){var good=c.streams.filter(function(x){return ok[x.url]});
     c.alive=good.length>0;
     if(good.length)c.streams=good.concat(c.streams.filter(function(x){return !ok[x.url]}))});
-  mineN=all.filter(function(c){return mine[c.id]&&c.alive}).length;
+  mineN=all.filter(function(c){return mine[c.id]&&(c.alive||c.country==='CO')}).length;
   var g=$('grid'),y=g.scrollTop;apply();g.scrollTop=y}).catch(function(){})}
 
 /* ---------- Programación (EPG) ---------- */
@@ -250,7 +250,8 @@ function apply(){
   view=all.filter(function(c){
     if(st.fav&&!favs[c.id])return false;
     if(!mine[c.id]&&!favs[c.id])return false;
-    if(checked&&c.alive===false&&!favs[c.id])return false;
+    /* los de Colombia no se ocultan: la comprobación se hace desde EE. UU. y algunos solo funcionan en Colombia */
+    if(checked&&c.alive===false&&!favs[c.id]&&c.country!=='CO')return false;
     if(st.country&&c.country!==st.country)return false;
     if(st.cat==='cine_en'){if(!c.en)return false}
     else if(st.cat&&(c.cats.indexOf(st.cat)<0||(st.cat==='movies'&&c.en)))return false;
