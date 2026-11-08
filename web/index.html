@@ -92,7 +92,7 @@ header>*{margin-right:14px}
 var API='https://iptv-org.github.io/api/';
 var M3U='https://iptv-org.github.io/iptv/index.m3u';
 /* En una web https el navegador bloquea señales http; dentro de las apps (Fire TV / Samsung) se permiten todas */
-var VERSION='2026.11.09';
+var VERSION='2026.11.09b';
 var PAGE=60, HTTPS_ONLY=location.protocol==='https:'&&!window.TV_APP&&!/[?&]app=1/.test(location.search);
 /* Canales que siempre aparecen primero */
 var FEATURED=[/^caracol tv/i,/^canal rcn/i,/^caracol internacional/i,/^canal 1$/i,/^se[ñn]al colombia/i,/^citytv/i,/^canal capital/i,/^teleantioquia/i,/^telecaf/i,/^telecaribe/i,/^telepac/i];
@@ -153,7 +153,7 @@ function start(){
   $('status').textContent='Cargando la lista más reciente de GitHub (iptv-org)…';
   loadAPI().catch(function(){return loadM3U()}).then(function(list){
     list.sort(function(a,b){return (rank(a)-rank(b))||a.name.localeCompare(b.name)});
-    all=list;mine=curate(list);mineN=Object.keys(mine).length;loadEPG();
+    all=list;mine=curate(list);mineN=Object.keys(mine).length;loadEPG();loadStatus();
     var c=load('filters',null);if(c){st.country=c.country||'';st.cat=c.cat||'';if(c.mine===false)st.mine=false}
     apply();
   }).catch(function(){$('status').textContent='No se pudo descargar la lista. Revisa la conexión y pulsa ⟳.'});
@@ -215,6 +215,17 @@ function curate(list){
   return pick;
 }
 
+/* ---------- Comprobación diaria de señales (GitHub Actions) ---------- */
+var STATUS_URL='https://wilve7192-arch.github.io/cafetv/status/status.json',checked=null;
+function loadStatus(){getJSON(STATUS_URL+'?t='+Date.now()).then(function(d){
+  var age=Date.now()/60000-d.generated;if(!d.ok||age>3*24*60)return;
+  var ok={};d.ok.forEach(function(u){ok[u]=1});checked={age:age};
+  all.forEach(function(c){var good=c.streams.filter(function(x){return ok[x.url]});
+    c.alive=good.length>0;
+    if(good.length)c.streams=good.concat(c.streams.filter(function(x){return !ok[x.url]}))});
+  mineN=all.filter(function(c){return mine[c.id]&&c.alive}).length;
+  var g=$('grid'),y=g.scrollTop;apply();g.scrollTop=y}).catch(function(){})}
+
 /* ---------- Programación (EPG) ---------- */
 var EPG_URL='https://wilve7192-arch.github.io/cafetv/epg/epg.json',epg={};
 function loadEPG(){getJSON(EPG_URL+'?t='+Date.now()).then(function(d){epg=d.channels||{};var g=$('grid'),y=g.scrollTop;apply();g.scrollTop=y}).catch(function(){})}
@@ -239,6 +250,7 @@ function apply(){
   view=all.filter(function(c){
     if(st.fav&&!favs[c.id])return false;
     if(!mine[c.id]&&!favs[c.id])return false;
+    if(checked&&c.alive===false&&!favs[c.id])return false;
     if(st.country&&c.country!==st.country)return false;
     if(st.cat==='cine_en'){if(!c.en)return false}
     else if(st.cat&&(c.cats.indexOf(st.cat)<0||(st.cat==='movies'&&c.en)))return false;
@@ -248,7 +260,7 @@ function apply(){
   $('bCountry').textContent='🌎 País: '+(st.country?(countries[st.country]||st.country):'Todos');
   $('bCat').textContent='🎬 Categoría: '+(st.cat?catName(st.cat):'Todas');
   $('bFav').className='btn'+(st.fav?' on':'');
-  $('status').textContent=view.length+(view.length===1?' canal':' canales')+' en Mi lista'+(st.cat?' · '+catName(st.cat):'')+' · lista actualizada desde github.com/iptv-org/iptv · v'+VERSION;
+  $('status').textContent=view.length+(view.length===1?' canal':' canales')+' en Mi lista'+(checked?' · ✅ comprobados hace '+Math.max(1,Math.round(checked.age/60))+' h':'')+(st.cat?' · '+catName(st.cat):'')+' · lista actualizada desde github.com/iptv-org/iptv · v'+VERSION;
   save('filters',{country:st.country,cat:st.cat,mine:st.mine});
   renderChips();
   $('grid').innerHTML='';shown=0;more();
