@@ -102,7 +102,7 @@ header>*{margin-right:14px}
 var API='https://iptv-org.github.io/api/';
 var M3U='https://iptv-org.github.io/iptv/index.m3u';
 /* En una web https el navegador bloquea señales http; dentro de las apps (Fire TV / Samsung) se permiten todas */
-var VERSION='2026.11.11';
+var VERSION='2026.11.12';
 var PAGE=60, HTTPS_ONLY=location.protocol==='https:'&&!window.TV_APP&&!/[?&]app=1/.test(location.search);
 /* Canales que siempre aparecen primero */
 var FEATURED=[/^caracol tv/i,/^canal rcn/i,/^caracol internacional/i,/^canal 1$/i,/^se[ñn]al colombia/i,/^citytv/i,/^canal capital/i,/^teleantioquia/i,/^telecaf/i,/^telecaribe/i,/^telepac/i];
@@ -135,9 +135,10 @@ function loadAPI(){
       var key=s.channel||s.title||s.url;
       var o=out[key];
       if(!o){o=out[key]={id:key,name:c?c.name:(s.title||'Canal'),logo:(c&&(c.logo||logos[c.id]))||'',country:c?c.country:'',cats:c?(c.categories||[]):[],lang:c?lang[c.id]:undefined,streams:[]}}
-      o.streams.push({url:s.url,q:s.quality||'',ref:s.referrer||'',ua:s.user_agent||''});
+      var qh=parseInt(s.quality,10);if(qh&&qh<480)return; /* baja calidad */
+      o.streams.push({url:s.url,q:s.quality||'',h:qh||0,ref:s.referrer||'',ua:s.user_agent||''});
     });
-    return Object.keys(out).map(function(k){return out[k]});
+    return Object.keys(out).map(function(k){return out[k]}).filter(function(c){return c.streams.length});
   });
 }
 function loadM3U(){
@@ -252,7 +253,8 @@ function loadStatus(){getJSON(STATUS_URL+'?t='+Date.now()).then(function(d){
   var ok={};d.ok.forEach(function(u){ok[u]=1});checked={age:age};
   all.forEach(function(c){var good=c.streams.filter(function(x){return ok[x.url]});
     c.alive=good.length>0;
-    if(good.length)c.streams=good.concat(c.streams.filter(function(x){return !ok[x.url]}))});
+    if(d.h)good.sort(function(a,b){return (d.h[b.url]||b.h||0)-(d.h[a.url]||a.h||0)});
+    if(good.length)c.streams=good; /* se eliminan las fuentes caídas o de baja calidad */});
   mineN=all.filter(function(c){return mine[c.id]&&(c.alive||c.country==='CO')}).length;
   refreshKeep()}).catch(function(){})}
 
@@ -282,6 +284,7 @@ function apply(){
     if(!mine[c.id]&&!favs[c.id])return false;
     /* los de Colombia no se ocultan: la comprobación se hace desde EE. UU. y algunos solo funcionan en Colombia */
     if(checked&&c.alive===false&&!favs[c.id]&&c.country!=='CO')return false;
+    if(!favs[c.id]&&deadHere(c))return false; /* no funcionó en este TV */
     if(st.country&&c.country!==st.country)return false;
     if(st.cat&&c.cats.indexOf(st.cat)<0)return false;
     if(q&&c.name.toLowerCase().indexOf(q)<0)return false;
@@ -358,6 +361,10 @@ function catItems(){
 /* ---------- Reproductor ---------- */
 var openedAt=0,lastKey=0,lastOk=0;
 var good=load('good',{}),probeTok=0,bad={};
+/* Fuentes que fallaron en ESTE televisor: se evitan durante 3 días */
+var badTV=load('badtv',{});(function(){var n=Date.now();for(var u in badTV)if(n-badTV[u]>3*864e5)delete badTV[u];for(var k in badTV)bad[k]=1})();
+function markBad(u){bad[u]=1;badTV[u]=Date.now();save('badtv',badTV)}
+function deadHere(c){for(var i=0;i<c.streams.length;i++)if(!badTV[c.streams[i].url])return false;return true}
 /* Prueba varias fuentes a la vez y usa la primera que responda */
 function pickSource(c,cb){
   var tok=++probeTok,done=false,pending=0,list=c.streams.slice(0,15),pref=good[c.id];
@@ -387,7 +394,7 @@ function play(i,s){
     pickSource(c,function(idx){clearTimeout(slow);if(cur!==i||scope!=='player')return;play(i,idx<0?0:idx)});
     return;
   }
-  cur=i;srcIdx=s||0;
+  cur=i;srcIdx=s||0;stalls=[];
   var st_=c.streams[srcIdx],v=$('video');
   if(scope!=='player')openedAt=Date.now();
   $('player').style.display='block';scope='player';
@@ -398,12 +405,12 @@ function play(i,s){
   var rc=load('recent',[]).filter(function(x){return x!==c.id});rc.unshift(c.id);save('recent',rc.slice(0,12));
   clearTimeout(watch);watch=setTimeout(function(){if(v.readyState<3)fail()},15000);
   /* si a los 8 s hay sonido pero no imagen (pantalla negra), prueba otra fuente */
-  clearTimeout(noVid);noVid=setTimeout(function(){if(scope==='player'&&v.readyState>=2&&!v.videoWidth){bad[st_.url]=1;msg('Sin imagen en esta fuente, probando otra…');fail()}},8000);
+  clearTimeout(noVid);noVid=setTimeout(function(){if(scope==='player'&&v.readyState>=2&&!v.videoWidth){markBad(st_.url);msg('Sin imagen en esta fuente, probando otra…');fail()}},8000);
   if(hls){hls.destroy();hls=null}
   v.removeAttribute('src');
   if(window.Hls&&Hls.isSupported()){
     /* Arranque rápido (cerca del directo) y búfer que crece hasta 30 s mientras se ve */
-    hls=new Hls({liveSyncDurationCount:3,maxBufferLength:30,maxMaxBufferLength:60,
+    hls=new Hls({liveSyncDurationCount:4,maxBufferLength:30,maxMaxBufferLength:60,
       backBufferLength:30,manifestLoadingTimeOut:8000,manifestLoadingMaxRetry:1,levelLoadingMaxRetry:2,
       fragLoadingMaxRetry:4,fragLoadingRetryDelay:1000,startFragPrefetch:true});
     var recovered=false;
@@ -416,14 +423,14 @@ function play(i,s){
   v.play().catch(function(){});
 }
 function fail(){
-  clearTimeout(watch);clearTimeout(noVid);var cc=view[cur];if(cc&&cc.streams[srcIdx])bad[cc.streams[srcIdx].url]=1;if($('player').style.display!=='block')return;
+  clearTimeout(watch);clearTimeout(noVid);var cc=view[cur];if(cc&&cc.streams[srcIdx])markBad(cc.streams[srcIdx].url);if($('player').style.display!=='block')return;
   var c=view[cur];
   var nx=srcIdx+1;while(c&&nx<c.streams.length&&bad[c.streams[nx].url])nx++;
   if(c&&nx<c.streams.length){msg('Probando fuente '+(nx+1)+' de '+c.streams.length+'…');play(cur,nx)}
   else msg('Este canal no está disponible ahora. Usa ▲▼ para cambiar.');
 }
 function msg(t){$('msg').textContent=t||''}
-function stop(){hideGuide();clearTimeout(watch);clearTimeout(noVid);probeTok++;clearTimeout(zapT);zapI=-1;$('ban').classList.add('hide');if(hls){hls.destroy();hls=null}var v=$('video');v.pause();v.removeAttribute('src');v.load();
+function stop(){hideGuide();stalls=[];clearTimeout(stallLong);clearTimeout(watch);clearTimeout(noVid);probeTok++;clearTimeout(zapT);zapI=-1;$('ban').classList.add('hide');if(hls){hls.destroy();hls=null}var v=$('video');v.pause();v.removeAttribute('src');v.load();
   $('player').style.display='none';scope='main';
   if(pendingRefresh||homeMode()){pendingRefresh=false;var keepId=view[cur]&&view[cur].id;apply();for(var j=0;j<view.length;j++)if(view[j].id===keepId){cur=j;break}}
   var el=document.querySelector('.card[data-i="'+cur+'"]');focus(el||$('q'));if(el)el.scrollIntoView({block:'center'})}
@@ -431,8 +438,18 @@ function showOSD(){$('osd').classList.remove('hide');if(!focused||!$('osd').cont
 function toggleFav(c){if(favs[c.id])delete favs[c.id];else favs[c.id]=1;save('favs',favs)}
 $('video').addEventListener('playing',function(){msg('');clearTimeout(watch);var c=view[cur],v=$('video');if(c&&c.streams[srcIdx]&&v.videoWidth&&good[c.id]!==c.streams[srcIdx].url){good[c.id]=c.streams[srcIdx].url;save('good',good)}});
 /* Solo avisa si la señal se detiene más de 3 s */
-var stallT=null;
-$('video').addEventListener('waiting',function(){clearTimeout(stallT);stallT=setTimeout(function(){if(scope==='player')msg('Cargando…')},3000)});
+var stallT=null,stallLong=null,stalls=[];
+$('video').addEventListener('waiting',function(){if(scope!=='player')return;
+  clearTimeout(stallT);stallT=setTimeout(function(){if(scope==='player')msg('Cargando…')},3000);
+  var v=$('video');if(v.currentTime<1)return; /* aún arrancando */
+  var n=Date.now();stalls=stalls.filter(function(t){return n-t<120000});stalls.push(n);
+  clearTimeout(stallLong);
+  /* señal inestable: 3 cortes en 2 minutos o un corte de más de 10 s -> otra fuente */
+  if(stalls.length>=3)return unstable();
+  stallLong=setTimeout(function(){if(scope==='player'&&v.readyState<3)unstable()},10000)});
+function unstable(){stalls=[];clearTimeout(stallLong);var c=view[cur];if(!c)return;
+  if(c.streams.length>1){msg('Señal inestable, cambiando de fuente…');fail()}}
+$('video').addEventListener('playing',function(){clearTimeout(stallLong)});
 $('video').addEventListener('timeupdate',function(){clearTimeout(stallT);if($('msg').textContent==='Cargando…')msg('')});
 /* Cartel con el nombre del canal (arriba a la izquierda) */
 var banT=null;
@@ -482,7 +499,7 @@ function activate(el){
     case 'bCountry':return openPicker('Elige un país',countryItems(),function(k){st.country=k;apply()});
     case 'bCat':return openPicker('Elige una categoría',catItems(),function(k){st.cat=k;apply()});
     case 'bFav':st.fav=!st.fav;return apply();
-    case 'bReload':return start();
+    case 'bReload':badTV={};bad={};save('badtv',{});return start(); /* vuelve a probar todo */
     case 'oClose':return stop();
     case 'oGuide':if($('guide').style.display==='block')hideGuide();else showGuide();showOSD();focus($('oGuide'));return;
     case 'oSrc':var c=view[cur];return play(cur,(srcIdx+1)%c.streams.length);
