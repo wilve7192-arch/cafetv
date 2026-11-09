@@ -102,7 +102,7 @@ header>*{margin-right:14px}
 var API='https://iptv-org.github.io/api/';
 var M3U='https://iptv-org.github.io/iptv/index.m3u';
 /* En una web https el navegador bloquea señales http; dentro de las apps (Fire TV / Samsung) se permiten todas */
-var VERSION='2026.11.12';
+var VERSION='2026.11.13';
 var PAGE=60, HTTPS_ONLY=location.protocol==='https:'&&!window.TV_APP&&!/[?&]app=1/.test(location.search);
 /* Canales que siempre aparecen primero */
 var FEATURED=[/^caracol tv/i,/^canal rcn/i,/^caracol internacional/i,/^canal 1$/i,/^se[ñn]al colombia/i,/^citytv/i,/^canal capital/i,/^teleantioquia/i,/^telecaf/i,/^telecaribe/i,/^telepac/i];
@@ -164,7 +164,7 @@ function start(){
   $('status').textContent='Cargando la lista más reciente de GitHub (iptv-org)…';
   loadAPI().catch(function(){return loadM3U()}).then(function(list){
     list.sort(function(a,b){return (rank(a)-rank(b))||a.name.localeCompare(b.name)});
-    all=list;mine=curate(list);mineN=Object.keys(mine).length;loadEPG();loadStatus();
+    mergeExtra(list);all=list;mine=curate(list);mineN=Object.keys(mine).length;loadEPG();loadStatus();
     var c=load('filters',null);if(c){st.country=c.country||'';st.cat=c.cat||'';if(c.mine===false)st.mine=false}
     apply();
   }).catch(function(){$('status').textContent='No se pudo descargar la lista. Revisa la conexión y pulsa ⟳.'});
@@ -212,6 +212,59 @@ var BIG=/^(telemundo|univisi[oó]n|unim[aá]s|las estrellas|canal 5|azteca (uno|
 function isSpanish(c){return c.lang?c.lang.indexOf('spa')>=0:HIS.indexOf(c.country)>=0}
 function score(c){var h=0;for(var i=0;i<c.streams.length;i++)if(c.streams[i].url.indexOf('https')===0){h=3;break}
   return (PRIO[c.country]||1)*10+Math.min(c.streams.length,10)+h+(c.logo?2:0)}
+/* ✏️ Canales agregados a pedido (lista m3u.cl Colombia, señales de los propios canales) */
+var EXTRA=[
+  ["Rewind", "https://www.rewindmusic.cl/senal/m3u/playlist.m3u8", "https://cdn.m3u.cl/logo/156_Rewind.png", "music", "CL", ""],
+  ["Estacion Retro", "https://ssh101.bozztv.com/ssh101/canalonline/chunks.m3u8", "https://cdn.m3u.cl/logo/1545_Estacion_Retro.png", "music", "CO", ""],
+  ["Cali TV", "https://5ab772334c39c.streamlock.net/live-calitv/_definst_/calitv1/playlist.m3u8", "https://cdn.m3u.cl/logo/113_Cali_TV.png", "general", "CO", ""],
+  ["Canal 12 Valledupar", "https://edge.teveo.com.co/live/AeAAAgAJAAFFA1IAyADIQCAAAAAAAAAAAmaBpKu1K3lYAAAA/playlist.m3u8", "https://cdn.m3u.cl/logo/114_Canal_12_Valledupar.png", "general", "CO", ""],
+  ["Canal Capital", "https://mdstrm.com/live-stream-playlist/57d01d6c28b263eb73b59a5a.m3u8", "https://cdn.m3u.cl/logo/115_Canal_Capital.png", "general", "CO", ""],
+  ["Canal Capital", "https://play.cdn.enetres.net/C99D9A0676F3401589C768D47D31605C021/021/playlist.m3u8", "https://cdn.m3u.cl/logo/115_Canal_Capital.png", "general", "CO", ""],
+  ["Canal CNC Medellin", "https://hvtraficonew.ddns.net/cncmedellin720/canalcncmedellin.stream_720p/index.m3u8", "https://cdn.m3u.cl/logo/116_Canal_CNC_Medellin.png", "general", "CO", "CNC Medellin"],
+  ["Canal CNC Pasto", "http://pastocnc1.ddns.net/pastocnc9/cnc9/playlist.m3u8", "https://cdn.m3u.cl/logo/117_Canal_CNC_Pasto.png", "general", "CO", ""],
+  ["Canal Doce Sincelejo", "http://api.new.livestream.com/accounts/27724665/events/8376416/live.m3u8", "https://cdn.m3u.cl/logo/118_Canal_Doce_Sincelejo.png", "general", "CO", ""],
+  ["Canal Institucional", "https://streaming.rtvc.gov.co/TV_CanalInstitucional_live/smil:live.smil/playlist.m3u8", "https://cdn.m3u.cl/logo/120_Canal_Institucional.png", "general", "CO", ""],
+  ["Canal Trece", "https://liveingesta118.cdnmedia.tv/trecetvlive/smil:rtmp01.smil/playlist.m3u8", "https://cdn.m3u.cl/logo/119_Canal_Trece.png", "general", "CO", "Trece"],
+  ["Canal TRO", "https://liveingesta118.cdnmedia.tv/canaltro2live/smil:live.smil/playlist.m3u8", "https://cdn.m3u.cl/logo/121_Canal_TRO.png", "general", "CO", ""],
+  ["Canal Visión Dorada", "https://movil.ejeserver.com/live/visiondorada.m3u8", "https://cdn.m3u.cl/logo/122_Canal_Vision_Dorada.png", "general", "CO", ""],
+  ["Caracol TV", "https://mdstrm.com/live-stream-playlist/574463697b9817cf0886fc17.m3u8", "https://cdn.m3u.cl/logo/123_Caracol.png", "general", "CO", ""],
+  ["CTV Barranquilla", "https://59a564764e2b6.streamlock.net/ctvbarranquilla/ctv/playlist.m3u8", "https://cdn.m3u.cl/logo/126_CTV.png", "general", "CO", ""],
+  ["Melody Channel TV", "https://melodychanneltv.moxapps.shop/live/GHkktiwlTkRa57Extm5Vl5Z6fC02/index.m3u8", "https://cdn.m3u.cl/logo/141_Melody_Channel_TV.png", "music", "CO", ""],
+  ["Señal Colombia", "https://streaming.rtvc.gov.co/TV_Senal_Colombia_live/smil:live.smil/playlist.m3u8", "https://cdn.m3u.cl/logo/128_Senal_Colombia.png", "general", "CO", ""],
+  ["Suram", "https://livetv.305streamhd.com:3111/live/suramtvlive.m3u8", "https://cdn.m3u.cl/logo/129_Suram.png", "general", "CO", "Suram TV"],
+  ["TDI", "https://play.amelbasoluciones.co:19360/tdicolombia/tdicolombia.m3u8", "https://cdn.m3u.cl/logo/130_TDI.png", "general", "CO", ""],
+  ["Teleislas", "https://5ab772334c39c.streamlock.net/live-teleislas/_definst_/teleislas/playlist.m3u8", "https://cdn.m3u.cl/logo/137_Tele_Islas.png", "general", "CO", ""],
+  ["Telecafe", "https://liveingesta118.cdnmedia.tv/telecafelive/smil:rtmp01.smil/playlist.m3u8", "https://cdn.m3u.cl/logo/131_Telecafe.png", "general", "CO", ""],
+  ["Telemedellin", "https://liveingesta118.cdnmedia.tv/telemedellintvlive/smil:dvrlive.smil/playlist.m3u8", "", "general", "CO", ""],
+  ["Telepacifico", "https://play.cdn.enetres.net/6E5C615AA5FF4123ACAF0DAB57B7B8DC021/022/playlist.m3u8", "https://cdn.m3u.cl/logo/135_Telepacifico.png", "general", "CO", ""],
+  ["Zoom TV", "https://canalzoom.smoothcloud.co:3027/live/canalzoombr1live.m3u8", "https://cdn.m3u.cl/logo/140_Zoom_TV.png", "general", "CO", "Zoom"],
+  ["Amordiscos TV", "https://amordiscosretrotv.moxapps.shop/live/cdYgaZmmh2VPhscWTxBp1kd9Egb2/index.m3u8", "https://cdn.m3u.cl/logo/112_Amordiscos_TV.png", "music", "CO", ""],
+  ["Telemusica", "https://telemusicahit.moxapps.shop/live/bu1rJpIiHrcRa4T1e972hnMExiw1/index.m3u8", "https://cdn.m3u.cl/logo/36_Telemusica.png", "music", "CO", ""],
+  ["Recuerdos Retro Radio TV", "https://panel.tvstream.cl:1936/8034/8034/playlist.m3u8", "https://cdn.m3u.cl/logo/521_Recuerdos_Retro_Radio_TV.png", "music", "CO", ""],
+  ["Retro Plus TV", "https://video06.logicahost.com.br/aretroplustv01/aretroplustv01/playlist.m3u8", "https://cdn.m3u.cl/logo/4_Retro_Plus_TV.png", "music", "CO", ""],
+  ["Retro Plus TV 2", "https://video06.logicahost.com.br/aretroplustv02/aretroplustv02/playlist.m3u8", "https://cdn.m3u.cl/logo/5_Retro_Plus_TV_Senal_2.png", "music", "CO", ""],
+  ["Retro Plus TV 3", "https://video06.logicahost.com.br/aretroplustv03/aretroplustv03/playlist.m3u8", "https://cdn.m3u.cl/logo/465_Retro_Plus_TV_Senal_3.png", "music", "CO", ""],
+  ["Tele Pasto", "https://hvtraficonew.ddns.net/telepasto/telepasto.stream/index.m3u8", "https://cdn.m3u.cl/logo/804_Tele_Pasto.png", "general", "CO", ""],
+  ["TV Peñol", "https://stmv1.voxtvhd.com.br/tvpenol/tvpenol/playlist.m3u8", "https://cdn.m3u.cl/logo/860_TV_Penol.png", "general", "CO", ""],
+  ["Buenisima Radio TV", "https://stream.mediaserver.com.co:8088/live/buenisimatv.m3u8", "https://cdn.m3u.cl/logo/898_Buenisima_Radio_TV.png", "music", "CO", ""],
+  ["Mundo de la Musica TV", "https://tv.arkeo.cl:1936/mundodelamusica/mundodelamusica/playlist.m3u8", "https://cdn.m3u.cl/logo/771_Mundo_de_la_Musica_TV.png", "music", "CO", ""],
+  ["Noticiero 90 Minutos", "https://play.cdn.enetres.net/184784E1D210401F8041E3E1266822CC021/026/playlist.m3u8", "https://cdn.m3u.cl/logo/1090_Noticiero_90_Minutos.png", "news", "CO", ""],
+  ["Veo TV", "https://movil.ejeserver.com/live/veotv.m3u8", "https://cdn.m3u.cl/logo/1157_Veo_TV.png", "general", "CO", ""],
+  ["Salsa Gorda Television", "https://www.televinterserver.com:2020/salsagordatvs/salsagordatvs.m3u8", "https://cdn.m3u.cl/logo/1557_Salsagorda_Television.png", "music", "CO", ""]
+];
+function norm(x){return String(x).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'')}
+var extraIds={};
+function mergeExtra(list){
+  var by={};list.forEach(function(c){var k=norm(c.name);if(!by[k]||c.country==='CO')by[k]=c});
+  EXTRA.forEach(function(e){if(!okUrl(e[1]))return;
+    var k=norm(e[5]||e[0]),c=by[k]||by[norm(e[0])];
+    if(!c){c={id:'x:'+norm(e[0]),name:e[0],logo:e[2],country:e[4],cats:[e[3]],lang:['spa'],streams:[]};list.push(c);by[norm(e[0])]=c}
+    if(!c.logo&&e[2])c.logo=e[2];
+    /* la señal del propio canal va primero */
+    c.streams=c.streams.filter(function(x){return x.url!==e[1]});
+    c.streams.unshift({url:e[1],q:'',h:0,ref:'',ua:'',official:true});
+    extraIds[c.id]=1});
+}
 function curate(list){
   var pick={},sp=list.filter(function(c){return isSpanish(c)&&!PAGO.test(c.name)&&!(c.country!=='CO'&&REGIONAL.test(c.name))&&!c.cats.some(function(k){return NOCAT.indexOf(k)>=0})});
   sp.forEach(function(c){if(c.country==='CO'||BIG.test(c.name)||/(cine|pel[ií]cula|movie|film|cinema|novela)/i.test(c.name))pick[c.id]=1});
@@ -229,6 +282,7 @@ function curate(list){
       if(INFANTIL.indexOf(c.name)<0||kidSeen[c.name])delete pick[c.id];else kidSeen[c.name]=1}
   });
   list.forEach(function(c){
+    if(extraIds[c.id])pick[c.id]=1;
     if(AGREGAR.indexOf(c.id)>=0||AGREGAR.indexOf(c.name)>=0)pick[c.id]=1;
     if(QUITAR.indexOf(c.id)>=0||QUITAR.indexOf(c.name)>=0)delete pick[c.id];
   });
@@ -251,9 +305,9 @@ var STATUS_URL='https://wilve7192-arch.github.io/cafetv/status/status.json',chec
 function loadStatus(){getJSON(STATUS_URL+'?t='+Date.now()).then(function(d){
   var age=Date.now()/60000-d.generated;if(!d.ok||age>3*24*60)return;
   var ok={};d.ok.forEach(function(u){ok[u]=1});checked={age:age};
-  all.forEach(function(c){var good=c.streams.filter(function(x){return ok[x.url]});
+  all.forEach(function(c){var good=c.streams.filter(function(x){return ok[x.url]||x.official});
     c.alive=good.length>0;
-    if(d.h)good.sort(function(a,b){return (d.h[b.url]||b.h||0)-(d.h[a.url]||a.h||0)});
+    good.sort(function(a,b){return ((b.official?1:0)-(a.official?1:0))||((d.h&&d.h[b.url]||b.h||0)-(d.h&&d.h[a.url]||a.h||0))});
     if(good.length)c.streams=good; /* se eliminan las fuentes caídas o de baja calidad */});
   mineN=all.filter(function(c){return mine[c.id]&&(c.alive||c.country==='CO')}).length;
   refreshKeep()}).catch(function(){})}
@@ -516,6 +570,7 @@ function back(){
 }
 /* Llamado por la app Android (Fire TV) al pulsar Atrás; false = salir de la app */
 window.tvBack=back;
+window.cafetvCanales=function(){return all}; /* para diagnóstico */
 var KEYS={37:'l',38:'u',39:'r',40:'d',13:'ok',10009:'back',27:'back',8:'back',4:'back',427:'chup',428:'chdn',33:'chup',34:'chdn',403:'fav',415:'ok',179:'ok'};
 try{if(window.tizen&&tizen.tvinputdevice)['ChannelUp','ChannelDown','ColorF0Red','MediaPlayPause','MediaPlay'].forEach(function(k){try{tizen.tvinputdevice.registerKey(k)}catch(e){}})}catch(e){}
 document.addEventListener('keydown',function(e){
