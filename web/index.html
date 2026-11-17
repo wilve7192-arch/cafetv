@@ -5,68 +5,104 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CaféTV – TV en vivo</title>
 <style>
-:root{--bg:#0d0f14;--panel:#171a22;--card:#1f2330;--txt:#eef1f7;--mut:#9aa3b5;--acc:#f0a23b;--foc:#ffffff}
+/* ===== CaféTV · diseño moderno (compatible con TV antiguos: sin gap en flex, sin inset) ===== */
+:root{--bg:#0a0c11;--panel:#12151d;--card:#171b25;--tile:#0f1219;--txt:#f3f5fa;--mut:#8f98ab;--acc:#f0a23b;--acc2:#ff7a45;--foc:#ffffff}
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;overflow:hidden}
+html,body{margin:0;height:100%;color:var(--txt);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;overflow:hidden;
+  background:#0a0c11;background:radial-gradient(1200px 600px at 85% -10%,#2a1c10 0%,rgba(10,12,17,0) 60%),#0a0c11}
 #app{display:flex;flex-direction:column;height:100%}
-header{display:flex;align-items:center;padding:18px 3vw;background:var(--panel)}
-header h1{margin:0 18px 0 0;font-size:28px;color:var(--acc);white-space:nowrap}
-.btn,.inp{background:var(--card);color:var(--txt);border:3px solid transparent;border-radius:12px;padding:12px 20px;font-size:20px;outline:none;cursor:pointer;white-space:nowrap}
-.inp{flex:1;min-width:120px}
-.btn.on{background:var(--acc);color:#111}
-header>*{margin-right:14px}
-#chips{display:flex;overflow-x:auto;overflow-y:hidden;padding:12px 3vw 4px;white-space:nowrap;scrollbar-width:none}
+header{display:flex;align-items:center;padding:16px 3vw 10px}
+header>*{margin-right:12px}
+header h1{margin:0 18px 0 0;font-size:30px;font-weight:800;letter-spacing:.5px;white-space:nowrap;color:var(--acc)}
+header h1 span{color:var(--txt)}
+.btn,.inp{background:rgba(255,255,255,.06);color:var(--txt);border:3px solid transparent;border-radius:999px;padding:11px 22px;font-size:19px;outline:none;cursor:pointer;white-space:nowrap}
+.inp{flex:1;min-width:120px;border-radius:14px}
+.btn.on{background:var(--acc);color:#16120b;font-weight:600}
+.focus{border-color:var(--foc)!important;box-shadow:0 0 0 5px rgba(240,162,59,.45),0 10px 30px rgba(0,0,0,.6);-webkit-transform:scale(1.07);transform:scale(1.07);z-index:2}
+#chips{display:flex;overflow-x:auto;overflow-y:hidden;padding:6px 3vw 6px;white-space:nowrap;scrollbar-width:none}
 #chips::-webkit-scrollbar{display:none}
-#chips .btn{margin-right:12px;padding:10px 18px;font-size:19px;flex:0 0 auto}
-.focus{border-color:var(--foc)!important;transform:scale(1.06);box-shadow:0 0 0 4px rgba(240,162,59,.55)}
-#status{padding:8px 3vw;color:var(--mut);font-size:18px}
-#grid{flex:1;overflow-y:auto;padding:10px 3vw 40px;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:22px;align-content:start}
-.card{background:var(--card);border:3px solid transparent;border-radius:16px;padding:14px;display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer;transition:transform .12s;position:relative}
-.card img{width:150px;height:84px;object-fit:contain}
-.card .ph{width:150px;height:84px;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:700;color:var(--acc)}
-.card .nm{font-size:18px;text-align:center;line-height:1.2;max-height:2.4em;overflow:hidden}
-.card .ct{font-size:14px;color:var(--mut)}
-.card .fav{position:absolute;top:8px;right:12px;color:var(--acc);font-size:22px}
+#chips .btn{margin-right:10px;padding:9px 18px;font-size:18px;flex:0 0 auto}
+#status{padding:4px 3vw 2px;color:var(--mut);font-size:15px}
+#grid{flex:1;overflow-y:auto;padding:14px 3vw 40px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));grid-gap:22px;gap:22px;align-content:start}
+.card{background:var(--card);border:3px solid transparent;border-radius:18px;padding:0 0 12px;display:flex;flex-direction:column;align-items:center;cursor:pointer;position:relative;overflow:hidden;-webkit-transition:-webkit-transform .12s;transition:transform .12s}
+.card img,.card .ph{width:100%;height:104px;object-fit:contain;padding:14px 22px;background:var(--tile);background:linear-gradient(160deg,#1d2230,#0f1219);margin-bottom:10px}
+.card .ph{display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:800;color:var(--acc)}
+.card .nm{font-size:17px;font-weight:600;text-align:center;line-height:1.2;max-height:2.4em;overflow:hidden;padding:0 10px}
+.card .ct{font-size:13px;color:var(--mut);margin-top:4px}
+.card .pg{font-size:13px;color:var(--acc);max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:4px 10px 0}
+.card .fav{position:absolute;top:8px;right:12px;color:var(--acc);font-size:22px;text-shadow:0 1px 4px #000}
+.card.focus{background:#222838}
 #more{grid-column:1/-1;justify-self:center}
-.modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:20}
-.modal .box{background:var(--panel);border-radius:18px;padding:24px;width:min(560px,90vw);max-height:86vh;display:flex;flex-direction:column;gap:12px}
-.modal h2{margin:0;font-size:26px}
-.modal .list{overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:6px}
-.modal .list .btn{text-align:left}
+/* inicio */
+#home{flex:1;overflow-y:auto;padding:0 3vw 60px;display:none}
+.hero{display:flex;align-items:center;margin:10px 0 6px;padding:26px 30px;border-radius:24px;background:#1a1410;background:linear-gradient(110deg,#2b1d10 0%,#171b25 55%,#11141c 100%);border:3px solid transparent}
+.hero img,.hero .ph{width:210px;height:118px;object-fit:contain;margin-right:30px;background:rgba(0,0,0,.25);border-radius:16px;padding:12px}
+.hero .ph{display:flex;align-items:center;justify-content:center;font-size:54px;font-weight:800;color:var(--acc)}
+.hero .tx{flex:1}
+.hero small{color:var(--acc);font-size:16px;letter-spacing:1px;text-transform:uppercase}
+.hero b{display:block;font-size:36px;margin:6px 0}
+.hero span{color:var(--mut);font-size:19px}
+.hero .go{margin-left:20px;background:var(--acc);color:#16120b;font-weight:700}
+.row h2{font-size:23px;margin:18px 0 2px;font-weight:700}
+.row h2 small{color:var(--mut);font-size:15px;font-weight:400}
+.rowc{display:flex;overflow-x:auto;overflow-y:hidden;padding:12px 8px 16px;scrollbar-width:none}
+.rowc::-webkit-scrollbar{display:none}
+.rowc .card{flex:0 0 190px;width:190px;margin-right:18px}
+.rowc .all{flex:0 0 150px;width:150px;margin-right:18px;justify-content:center;text-align:center;font-size:19px;color:var(--acc);padding:0}
+/* selector */
+.modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;z-index:40}
+.modal .box{background:var(--panel);border-radius:22px;padding:24px;width:560px;max-width:90vw;max-height:86vh;display:flex;flex-direction:column}
+.modal h2{margin:0 0 12px;font-size:26px}
+.modal .list{overflow-y:auto;display:flex;flex-direction:column;padding:6px}
+.modal .list .btn{text-align:left;margin-bottom:8px;border-radius:14px}
+/* reproductor */
 #player{position:fixed;top:0;left:0;right:0;bottom:0;background:#000;display:none;z-index:30}
 #player video{position:absolute;top:0;left:0;width:100%;height:100%;background:#000;object-fit:contain}
-#osd{position:absolute;left:0;right:0;bottom:0;padding:28px 4vw;background:linear-gradient(transparent,rgba(0,0,0,.92));display:flex;align-items:center;gap:20px;transition:opacity .3s}
-#osd img{width:120px;height:68px;object-fit:contain}
+#osd{position:absolute;left:0;right:0;bottom:0;padding:30px 4vw;background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.94));display:flex;align-items:center;-webkit-transition:opacity .3s;transition:opacity .3s}
+#osd>*{margin-right:16px}
+#osd img{width:130px;height:74px;object-fit:contain}
 #osd .t{flex:1}
 #osd .t b{font-size:30px;display:block}
 #osd .t span{color:var(--mut);font-size:18px}
 #msg{position:absolute;top:38%;left:10%;right:10%;text-align:center;font-size:34px;color:#fff;text-shadow:0 2px 6px #000;pointer-events:none}
 .hide{opacity:0;pointer-events:none}
-#ban{position:absolute;top:30px;left:40px;background:rgba(0,0,0,.72);padding:14px 26px;border-radius:14px;font-size:30px;transition:opacity .3s;border-left:6px solid var(--acc)}
-#home{flex:1;overflow-y:auto;padding:0 3vw 60px;display:none}
-.row h2{font-size:24px;margin:16px 0 6px;font-weight:600}
-.rowc{display:flex;overflow-x:auto;overflow-y:hidden;padding:10px 6px 16px;scrollbar-width:none}
-.rowc::-webkit-scrollbar{display:none}
-.rowc .card{flex:0 0 190px;width:190px;margin-right:18px}
-.rowc .all{flex:0 0 150px;width:150px;margin-right:18px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:20px;color:var(--acc)}
-.card.focus{background:#2b3142}
+#ban{position:absolute;top:30px;left:40px;max-width:60%;background:rgba(10,12,17,.82);padding:16px 28px;border-radius:18px;font-size:30px;font-weight:700;-webkit-transition:opacity .3s;transition:opacity .3s;border-left:6px solid var(--acc)}
+#ban .pn{display:block;font-size:20px;font-weight:400;color:#ffd38a;margin-top:6px}
 #ban .pb{height:6px;background:#3a4052;border-radius:3px;margin-top:8px;overflow:hidden}
 #ban .pb i{display:block;height:100%;background:var(--acc)}
-#ban .pn{display:block;font-size:20px;color:#ffd38a;margin-top:6px}
-.card .pg{font-size:13px;color:var(--acc);max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-#guide{position:absolute;right:4vw;top:8%;width:40vw;max-height:70%;overflow:hidden;background:rgba(10,12,18,.94);border-radius:16px;padding:20px 24px;display:none}
+#ban small{display:block;font-size:17px;font-weight:400;color:var(--mut);margin-top:6px}
+#guide{position:absolute;right:4vw;top:8%;width:40vw;max-height:70%;overflow:hidden;background:rgba(10,12,18,.95);border-radius:18px;padding:20px 24px;display:none}
 #guide h3{margin:0 0 12px;font-size:26px}
 #guide .r{display:flex;padding:8px 0;border-bottom:1px solid #2a2f3d;font-size:21px}
 #guide .r b{width:120px;flex:0 0 120px;color:var(--mut);font-weight:400}
 #guide .r.now{color:var(--acc)}
-#ban small{display:block;font-size:18px;color:var(--mut);margin-top:4px}
+/* guía en grilla */
+#gv{position:fixed;top:0;left:0;right:0;bottom:0;background:#0a0c11;display:none;z-index:25;flex-direction:column}
+#gv .gh{display:flex;align-items:center;padding:18px 3vw 8px}
+#gv .gh h2{margin:0;font-size:28px;flex:1}
+#gv .gh span{color:var(--mut);font-size:17px}
+#gv .tl{position:relative;height:30px;margin-left:calc(3vw + 270px);margin-right:3vw;overflow:hidden;color:var(--mut);font-size:15px}
+#gv .tl i{position:absolute;top:4px;font-style:normal;border-left:1px solid #2a2f3d;padding-left:6px}
+#gv .gb{flex:1;overflow-y:auto;padding:0 3vw 40px}
+#gv .gr{display:flex;height:76px;margin-bottom:6px}
+#gv .gc{flex:0 0 260px;width:260px;margin-right:10px;display:flex;align-items:center;background:var(--card);border-radius:12px;padding:0 12px;overflow:hidden}
+#gv .gc img{width:70px;height:42px;object-fit:contain;margin-right:12px}
+#gv .gc b{font-size:16px;line-height:1.2;max-height:2.4em;overflow:hidden}
+#gv .gt{flex:1;position:relative;overflow:hidden}
+#gv .gp{position:absolute;top:0;bottom:0;background:#1a1f2b;border:3px solid transparent;border-radius:10px;padding:8px 12px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:17px;cursor:pointer}
+#gv .gp small{display:block;color:var(--mut);font-size:13px;margin-top:4px}
+#gv .gp.now{background:#2a2216;border-color:rgba(240,162,59,.35)}
+#gv .gp.focus{-webkit-transform:none;transform:none;background:#3a2c18}
+#gv .nl{position:absolute;top:0;bottom:0;width:2px;background:var(--acc2);z-index:3}
+#gv .empty{color:var(--mut);font-size:22px;padding:40px 3vw}
 </style>
 </head>
 <body>
 <div id="app">
   <header>
-    <h1>📺 CaféTV</h1>
-    <input id="q" class="inp" data-nav placeholder="Buscar canal…" autocomplete="off">
+    <h1>☕ Café<span>TV</span></h1>
+    <input id="q" class="inp" data-nav placeholder="🔍 Buscar canal…" autocomplete="off">
+    <button class="btn" data-nav id="bGuide">📅 Guía</button>
     <button class="btn" data-nav id="bCountry">🌎 País: Todos</button>
     <button class="btn" data-nav id="bCat">🎬 Categoría: Todas</button>
     <button class="btn" data-nav id="bFav">★ Favoritos</button>
@@ -78,6 +114,8 @@ header>*{margin-right:14px}
   <div id="grid"></div>
   <div id="home"></div>
 </div>
+
+<div id="gv"><div class="gh"><h2>📅 Guía de programación</h2><span>▲▼ canales · ◀▶ horas · OK ver · Atrás salir</span></div><div class="tl" id="gvTl"></div><div class="gb" id="gvB"></div></div>
 
 <div class="modal" id="modal"><div class="box"><h2 id="mTitle"></h2><div class="list" id="mList"></div></div></div>
 
@@ -102,7 +140,7 @@ header>*{margin-right:14px}
 var API='https://iptv-org.github.io/api/';
 var M3U='https://iptv-org.github.io/iptv/index.m3u';
 /* En una web https el navegador bloquea señales http; dentro de las apps (Fire TV / Samsung) se permiten todas */
-var VERSION='2026.11.17';
+var VERSION='2026.11.18';
 var PAGE=60, HTTPS_ONLY=location.protocol==='https:'&&!window.TV_APP&&!/[?&]app=1/.test(location.search);
 /* Canales que siempre aparecen primero */
 var FEATURED=[/^caracol tv/i,/^canal rcn/i,/^caracol internacional/i,/^canal 1$/i,/^se[ñn]al colombia/i,/^citytv/i,/^canal capital/i,/^teleantioquia/i,/^telecaf/i,/^telecaribe/i,/^telepac/i];
@@ -160,15 +198,30 @@ function loadM3U(){
     return Object.keys(out).map(function(k){return out[k]});
   });
 }
+/* Copia local de Mi lista: la app abre al instante y se actualiza en segundo plano */
+function snapshot(){try{
+  var keep=all.filter(function(c){return mine[c.id]||favs[c.id]}).map(function(c){return {id:c.id,name:c.name,logo:c.logo,country:c.country,cats:c.cats,alive:c.alive,
+    streams:c.streams.slice(0,8).map(function(x){return {url:x.url,h:x.h||0,q:x.q||'',official:x.official?1:0,ref:x.ref||'',ua:x.ua||''}})}});
+  save('cache',{t:Date.now(),v:VERSION,list:keep,co:Object.keys(coIds)})}catch(e){}}
+var fromCache=false;
 function start(){
-  $('status').textContent='Cargando la lista más reciente de GitHub (iptv-org)…';
+  var cc=load('cache',null);
+  if(cc&&cc.list&&cc.list.length&&cc.v===VERSION&&!all.length){
+    all=cc.list;mine={};all.forEach(function(c){mine[c.id]=1});coIds={};(cc.co||[]).forEach(function(id){coIds[id]=1});
+    mineN=all.length;fromCache=true;
+    var f=load('filters',null);if(f){st.country=f.country||'';st.cat=f.cat||''}
+    apply();loadEPG();focusFirstCard();
+  }
+  if(!fromCache)$('status').textContent='Cargando la lista más reciente de GitHub (iptv-org)…';
   var coP=fetch(CO_M3U,{cache:'no-cache'}).then(function(r){return r.ok?r.text():''}).catch(function(){return ''});
   loadAPI().catch(function(){return loadM3U()}).then(function(list){return coP.then(function(t){mergeCO(list,t);return list})}).then(function(list){
     list.sort(function(a,b){return (rank(a)-rank(b))||a.name.localeCompare(b.name)});
-    mergeExtra(list);all=list;mine=curate(list);mineN=Object.keys(mine).length;loadEPG();loadStatus();
-    var c=load('filters',null);if(c){st.country=c.country||'';st.cat=c.cat||'';if(c.mine===false)st.mine=false}
-    apply();
-  }).catch(function(){$('status').textContent='No se pudo descargar la lista. Revisa la conexión y pulsa ⟳.'});
+    mergeExtra(list);var wasCache=fromCache;fromCache=false;
+    all=list;mine=curate(list);mineN=Object.keys(mine).length;loadEPG();loadStatus();
+    var c=load('filters',null);if(c){st.country=c.country||'';st.cat=c.cat||''}
+    if(wasCache)refreshKeep();else{apply();focusFirstCard()}
+    snapshot();
+  }).catch(function(){if(!all.length)$('status').textContent='No se pudo descargar la lista. Revisa la conexión y pulsa ⟳.'});
 }
 
 /* ---------- Categorías por tipo ---------- */
@@ -338,12 +391,13 @@ function loadStatus(){getJSON(STATUS_URL+'?t='+Date.now()).then(function(d){
     c.alive=good.length>0;
     good.sort(function(a,b){return ((b.official?1:0)-(a.official?1:0))||((d.h&&d.h[b.url]||b.h||0)-(d.h&&d.h[a.url]||a.h||0))});
     if(good.length)c.streams=coIds[c.id]?good.concat(c.streams.filter(function(x){return good.indexOf(x)<0})):good; /* los de la lista de Colombia conservan todas sus fuentes */});
-  mineN=all.filter(function(c){return mine[c.id]&&(c.alive||c.country==='CO'||coIds[c.id])}).length;
+  mineN=all.filter(function(c){return mine[c.id]&&(c.alive||c.country==='CO'||coIds[c.id])}).length;snapshot();
   refreshKeep()}).catch(function(){})}
 
 /* ---------- Programación (EPG) ---------- */
 var EPG_URL='https://wilve7192-arch.github.io/cafetv/epg/epg.json',epg={};
-function loadEPG(){getJSON(EPG_URL+'?t='+Date.now()).then(function(d){epg=d.channels||{};refreshKeep()}).catch(function(){})}
+function epgAlias(){all.forEach(function(c){if(!epg[c.id]){var a=epg['n:'+norm(c.name)];if(a)epg[c.id]=a}})}
+function loadEPG(){getJSON(EPG_URL+'?t='+Date.now()).then(function(d){epg=d.channels||{};epgAlias();refreshKeep()}).catch(function(){})}
 function hhmm(m){var d=new Date(m*60000),h=d.getHours(),mi=d.getMinutes(),ap=h<12?'a. m.':'p. m.';h=h%12||12;return h+':'+(mi<10?'0':'')+mi+' '+ap}
 function progs(id){var a=epg[id];if(!a)return null;var n=Date.now()/60000,i=0;
   while(i<a.length&&a[i][1]<=n)i++;if(i>=a.length)return null;return a.slice(i)}
@@ -405,6 +459,13 @@ function renderHome(){
       idx.slice(0,24).map(function(i){return cardHTML(view[i],i)}).join('')+
       (idx.length>24||k!=='recent'?'<div class="card all" data-nav data-row="'+k+'">Ver todos<br>('+idx.length+') ›</div>':'')+'</div></div>';
   });
+  /* destacado: el último canal visto (o el primero de la lista) */
+  var last=load('last',null),hi=last&&pos[last]!==undefined?pos[last]:0,hc=view[hi];
+  if(hc){var x=nowNext(hc.id);
+    html='<div class="hero" data-nav data-i="'+hi+'">'+(hc.logo?'<img src="'+esc(hc.logo)+'">':'<div class="ph">'+esc(hc.name.charAt(0))+'</div>')+
+      '<div class="tx"><small>'+(last&&pos[last]!==undefined?'▶ Continuar viendo':'⭐ Destacado')+'</small><b>'+esc(hc.name)+'</b><span>'+
+      esc(x&&x.now?'Ahora: '+x.now[2]+' · hasta '+hhmm(x.now[1]):(countries[hc.country]||hc.country||''))+'</span></div>'+
+      '<span class="btn go">Ver ahora ›</span></div>'+html}
   $('home').innerHTML=html;
 }
 function more(){
@@ -552,7 +613,27 @@ var focused=null;
 function focus(el){if(!el)return;if(focused)focused.classList.remove('focus');focused=el;el.classList.add('focus');
   if(el.tagName==='INPUT')el.focus();else{if(document.activeElement&&document.activeElement.blur)document.activeElement.blur()}
   el.scrollIntoView({block:'nearest',inline:'nearest'})}
-function scopeEl(){return scope==='modal'?$('modal'):scope==='player'?$('osd'):$('app')}
+function scopeEl(){return scope==='modal'?$('modal'):scope==='player'?$('osd'):scope==='gv'?$('gv'):$('app')}
+function focusFirstCard(){if(scope!=='main')return;var e=document.querySelector('#home [data-nav],#grid .card');if(e)focus(e)}
+/* ---------- Guía en grilla ---------- */
+var GV_MIN=210;
+function openGV(){
+  var g=$('gv');g.style.display='flex';scope='gv';
+  var nowM=Date.now()/60000,t0=Math.floor(nowM/30)*30,t1=t0+GV_MIN;
+  var w=Math.max(400,$('gvB').clientWidth-270-parseInt(getComputedStyle($('gvB')).paddingLeft,10)*2),px=w/GV_MIN;
+  var tl='';for(var t=t0;t<t1;t+=30)tl+='<i style="left:'+((t-t0)*px)+'px">'+hhmm(t)+'</i>';$('gvTl').innerHTML=tl;
+  var html='',n=0;
+  for(var i=0;i<view.length&&n<150;i++){var c=view[i],p=progs(c.id);if(!p)continue;n++;
+    var blocks='';p.forEach(function(x){if(x[1]<=t0||x[0]>=t1)return;
+      var a=Math.max(x[0],t0),b=Math.min(x[1],t1);
+      blocks+='<div class="gp'+(x[0]<=nowM&&x[1]>nowM?' now':'')+'" data-nav data-g data-i="'+i+'" style="left:'+((a-t0)*px)+'px;width:'+Math.max(30,(b-a)*px-6)+'px">'+
+        esc(x[2])+'<small>'+hhmm(x[0])+' – '+hhmm(x[1])+'</small></div>'});
+    html+='<div class="gr"><div class="gc">'+(c.logo?'<img src="'+esc(c.logo)+'">':'')+'<b>'+esc(c.name)+'</b></div><div class="gt">'+blocks+
+      '<div class="nl" style="left:'+((nowM-t0)*px)+'px"></div></div></div>'}
+  $('gvB').innerHTML=n?html:'<div class="empty">📅 La programación todavía no está disponible.<br>Se descarga automáticamente varias veces al día; vuelve a intentarlo más tarde.</div>';
+  $('gvB').scrollTop=0;var f=$('gvB').querySelector('.gp.now')||$('gvB').querySelector('.gp');if(f)focus(f);else focus(null);
+}
+function closeGV(){$('gv').style.display='none';scope='main';focus($('bGuide'))}
 function focusFirst(){var e=scopeEl().querySelector('[data-nav]');focus(e)}
 function move(dir){
   var els=[].slice.call(scopeEl().querySelectorAll('[data-nav]'));
@@ -566,7 +647,8 @@ function move(dir){
 }
 function activate(el){
   if(!el)return;
-  if(el.classList.contains('card'))return play(+el.getAttribute('data-i'));
+  if(el.hasAttribute&&el.hasAttribute('data-g')){closeGV();return play(+el.getAttribute('data-i'))}
+  if(el.classList.contains('card')||el.classList.contains('hero'))return play(+el.getAttribute('data-i'));
   if(el.id==='more'){var n=shown;more();focus(document.querySelector('.card[data-i="'+n+'"]'));return}
   if(el.hasAttribute&&el.hasAttribute('data-row')){var r=el.getAttribute('data-row');
     if(r==='fav')st.fav=true;else if(r==='CO')st.country='CO';else if(r!=='recent')st.cat=r;
@@ -582,7 +664,8 @@ function activate(el){
     case 'bCountry':return openPicker('Elige un país',countryItems(),function(k){st.country=k;apply()});
     case 'bCat':return openPicker('Elige una categoría',catItems(),function(k){st.cat=k;apply()});
     case 'bFav':st.fav=!st.fav;return apply();
-    case 'bReload':badTV={};bad={};save('badtv',{});return start(); /* vuelve a probar todo */
+    case 'bGuide':return openGV();
+    case 'bReload':badTV={};bad={};save('badtv',{});save('cache',null);all=[];return start(); /* vuelve a probar todo */
     case 'oClose':return stop();
     case 'oGuide':if($('guide').style.display==='block')hideGuide();else showGuide();showOSD();focus($('oGuide'));return;
     case 'oSrc':var c=view[cur];return play(cur,(srcIdx+1)%c.streams.length);
@@ -592,6 +675,7 @@ function activate(el){
 }
 function back(){
   if(scope==='modal'){closePicker();return true}
+  if(scope==='gv'){closeGV();return true}
   if(scope==='player'){if($('guide').style.display==='block')hideGuide();else if($('osd').classList.contains('hide'))stop();else $('osd').classList.add('hide');return true}
   if(st.q||st.fav||st.country||st.cat){st.q='';$('q').value='';st.fav=false;st.country='';st.cat='';apply();focus($('q'));return true}
   try{if(window.tizen){tizen.application.getCurrentApplication().exit();return true}}catch(e){}
