@@ -102,7 +102,7 @@ header>*{margin-right:14px}
 var API='https://iptv-org.github.io/api/';
 var M3U='https://iptv-org.github.io/iptv/index.m3u';
 /* En una web https el navegador bloquea señales http; dentro de las apps (Fire TV / Samsung) se permiten todas */
-var VERSION='2026.11.13';
+var VERSION='2026.11.17';
 var PAGE=60, HTTPS_ONLY=location.protocol==='https:'&&!window.TV_APP&&!/[?&]app=1/.test(location.search);
 /* Canales que siempre aparecen primero */
 var FEATURED=[/^caracol tv/i,/^canal rcn/i,/^caracol internacional/i,/^canal 1$/i,/^se[ñn]al colombia/i,/^citytv/i,/^canal capital/i,/^teleantioquia/i,/^telecaf/i,/^telecaribe/i,/^telepac/i];
@@ -162,7 +162,8 @@ function loadM3U(){
 }
 function start(){
   $('status').textContent='Cargando la lista más reciente de GitHub (iptv-org)…';
-  loadAPI().catch(function(){return loadM3U()}).then(function(list){
+  var coP=fetch(CO_M3U,{cache:'no-cache'}).then(function(r){return r.ok?r.text():''}).catch(function(){return ''});
+  loadAPI().catch(function(){return loadM3U()}).then(function(list){return coP.then(function(t){mergeCO(list,t);return list})}).then(function(list){
     list.sort(function(a,b){return (rank(a)-rank(b))||a.name.localeCompare(b.name)});
     mergeExtra(list);all=list;mine=curate(list);mineN=Object.keys(mine).length;loadEPG();loadStatus();
     var c=load('filters',null);if(c){st.country=c.country||'';st.cat=c.cat||'';if(c.mine===false)st.mine=false}
@@ -212,6 +213,33 @@ var BIG=/^(telemundo|univisi[oó]n|unim[aá]s|las estrellas|canal 5|azteca (uno|
 function isSpanish(c){return c.lang?c.lang.indexOf('spa')>=0:HIS.indexOf(c.country)>=0}
 function score(c){var h=0;for(var i=0;i<c.streams.length;i++)if(c.streams[i].url.indexOf('https')===0){h=3;break}
   return (PRIO[c.country]||1)*10+Math.min(c.streams.length,10)+h+(c.logo?2:0)}
+/* ---------- Lista completa de Colombia de iptv-org (agregada a pedido, sin filtros) ---------- */
+var CO_M3U='https://iptv-org.github.io/iptv/countries/co.m3u',coIds={};
+function mergeCO(list,text){
+  if(!text)return;
+  var byId={},byName={};list.forEach(function(c){byId[c.id]=c;byName[norm(c.name)]=c});
+  var L=text.split(/\r?\n/),info=null;
+  for(var i=0;i<L.length;i++){var l=L[i];
+    if(l.indexOf('#EXTINF')===0){
+      var a=function(n){var m=l.match(new RegExp(n+'="([^"]*)"'));return m?m[1]:''};
+      var nm=l.split(',').pop().trim(),h=parseInt((nm.match(/\((\d+)p\)/)||[])[1],10)||0;
+      info={id:a('tvg-id').split('@')[0],name:nm.replace(/\s*\(\d+p\).*$/,'').replace(/\s*\[.*\]\s*$/,'').trim(),logo:a('tvg-logo'),grp:a('group-title'),h:h};
+    }else if(info&&l&&l[0]!=='#'){
+      var u=l.trim();
+      if(okUrl(u)){
+        var c=(info.id&&byId[info.id])||byName[norm(info.name)];
+        if(!c){c={id:info.id||('co:'+norm(info.name)),name:info.name,logo:info.logo,country:'CO',
+          cats:info.grp?info.grp.toLowerCase().split(';'):[],lang:['spa'],streams:[]};list.push(c);byId[c.id]=c;byName[norm(c.name)]=c}
+        if(!c.logo&&info.logo)c.logo=info.logo;
+        var has=false;for(var j=0;j<c.streams.length;j++)if(c.streams[j].url===u){has=true;break}
+        if(!has)c.streams.push({url:u,q:info.h?info.h+'p':'',h:info.h,ref:'',ua:''});
+        coIds[c.id]=1;
+      }
+      info=null;
+    }
+  }
+}
+
 /* ✏️ Canales agregados a pedido (lista m3u.cl Colombia, señales de los propios canales) */
 var EXTRA=[
   ["Rewind", "https://www.rewindmusic.cl/senal/m3u/playlist.m3u8", "https://cdn.m3u.cl/logo/156_Rewind.png", "music", "CL", ""],
@@ -283,6 +311,7 @@ function curate(list){
   });
   list.forEach(function(c){
     if(extraIds[c.id])pick[c.id]=1;
+    if(coIds[c.id]&&!PAGO.test(c.name))pick[c.id]=1;
     if(AGREGAR.indexOf(c.id)>=0||AGREGAR.indexOf(c.name)>=0)pick[c.id]=1;
     if(QUITAR.indexOf(c.id)>=0||QUITAR.indexOf(c.name)>=0)delete pick[c.id];
   });
@@ -308,8 +337,8 @@ function loadStatus(){getJSON(STATUS_URL+'?t='+Date.now()).then(function(d){
   all.forEach(function(c){var good=c.streams.filter(function(x){return ok[x.url]||x.official});
     c.alive=good.length>0;
     good.sort(function(a,b){return ((b.official?1:0)-(a.official?1:0))||((d.h&&d.h[b.url]||b.h||0)-(d.h&&d.h[a.url]||a.h||0))});
-    if(good.length)c.streams=good; /* se eliminan las fuentes caídas o de baja calidad */});
-  mineN=all.filter(function(c){return mine[c.id]&&(c.alive||c.country==='CO')}).length;
+    if(good.length)c.streams=coIds[c.id]?good.concat(c.streams.filter(function(x){return good.indexOf(x)<0})):good; /* los de la lista de Colombia conservan todas sus fuentes */});
+  mineN=all.filter(function(c){return mine[c.id]&&(c.alive||c.country==='CO'||coIds[c.id])}).length;
   refreshKeep()}).catch(function(){})}
 
 /* ---------- Programación (EPG) ---------- */
@@ -337,8 +366,8 @@ function apply(){
     if(st.fav&&!favs[c.id])return false;
     if(!mine[c.id]&&!favs[c.id])return false;
     /* los de Colombia no se ocultan: la comprobación se hace desde EE. UU. y algunos solo funcionan en Colombia */
-    if(checked&&c.alive===false&&!favs[c.id]&&c.country!=='CO')return false;
-    if(!favs[c.id]&&deadHere(c))return false; /* no funcionó en este TV */
+    if(checked&&c.alive===false&&!favs[c.id]&&c.country!=='CO'&&!coIds[c.id])return false;
+    if(!favs[c.id]&&!coIds[c.id]&&deadHere(c))return false; /* no funcionó en este TV */
     if(st.country&&c.country!==st.country)return false;
     if(st.cat&&c.cats.indexOf(st.cat)<0)return false;
     if(q&&c.name.toLowerCase().indexOf(q)<0)return false;
