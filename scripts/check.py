@@ -70,6 +70,14 @@ def main(out):
         if spa or eng_movie:
             wanted.add(cid)
     todo = [s for s in streams if s.get('channel') in wanted and s.get('url')]
+    # señales agregadas a mano en la app (lista EXTRA de web/index.html)
+    try:
+        html = open('web/index.html', encoding='utf-8').read()
+        bloque = html.split('var EXTRA=[', 1)[1].split('];', 1)[0]
+        for u in re.findall(r'\["[^"]*",\s*"(https?://[^"]+)"', bloque):
+            todo.append({'channel': 'extra', 'url': u})
+    except Exception as e:
+        print('sin EXTRA:', e)
     print(f'Comprobando {len(todo)} señales de {len(wanted)} canales…', flush=True)
     t0 = time.time()
     with ThreadPoolExecutor(64) as ex:
