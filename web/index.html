@@ -140,7 +140,7 @@ header h1 span{color:var(--txt)}
 var API='https://iptv-org.github.io/api/';
 var M3U='https://iptv-org.github.io/iptv/index.m3u';
 /* En una web https el navegador bloquea señales http; dentro de las apps (Fire TV / Samsung) se permiten todas */
-var VERSION='2026.11.18';
+var VERSION='2026.11.18b';
 var PAGE=60, HTTPS_ONLY=location.protocol==='https:'&&!window.TV_APP&&!/[?&]app=1/.test(location.search);
 /* Canales que siempre aparecen primero */
 var FEATURED=[/^caracol tv/i,/^canal rcn/i,/^caracol internacional/i,/^canal 1$/i,/^se[ñn]al colombia/i,/^citytv/i,/^canal capital/i,/^teleantioquia/i,/^telecaf/i,/^telecaribe/i,/^telepac/i];
@@ -396,7 +396,9 @@ function loadStatus(){getJSON(STATUS_URL+'?t='+Date.now()).then(function(d){
 
 /* ---------- Programación (EPG) ---------- */
 var EPG_URL='https://wilve7192-arch.github.io/cafetv/epg/epg.json',epg={};
-function epgAlias(){all.forEach(function(c){if(!epg[c.id]){var a=epg['n:'+norm(c.name)];if(a)epg[c.id]=a}})}
+function epgAlias(){all.forEach(function(c){if(epg[c.id])return;
+  var n=norm(c.name),base=norm(String(c.id).split('.')[0]),cands=[n,base,n.replace(/tv$/,''),n.replace(/^canal/,''),n.replace(/^canal/,'').replace(/tv$/,''),n.replace(/hd$/,'')];
+  for(var i=0;i<cands.length;i++){var a=cands[i]&&epg['n:'+cands[i]];if(a){epg[c.id]=a;return}}})}
 function loadEPG(){getJSON(EPG_URL+'?t='+Date.now()).then(function(d){epg=d.channels||{};epgAlias();refreshKeep()}).catch(function(){})}
 function hhmm(m){var d=new Date(m*60000),h=d.getHours(),mi=d.getMinutes(),ap=h<12?'a. m.':'p. m.';h=h%12||12;return h+':'+(mi<10?'0':'')+mi+' '+ap}
 function progs(id){var a=epg[id];if(!a)return null;var n=Date.now()/60000,i=0;
