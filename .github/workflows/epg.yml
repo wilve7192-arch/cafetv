@@ -1,26 +1,45 @@
 name: Programación (EPG) de CaféTV
 
+# Usa el programa oficial de guías de iptv-org (código abierto) para descargar
+# la programación de los canales de Mi lista desde sitios como mi.tv y gatotv.com.
 on:
   schedule:
-    - cron: '23 */6 * * *'   # cada 6 horas
+    - cron: '17 */6 * * *'   # cada 6 horas
   workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: epg
+  cancel-in-progress: true
+
 jobs:
   epg:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Descargar y convertir la programación
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Elegir canales con guía
+        run: python3 scripts/epg.py --channels custom.channels.xml
+      - name: Descargar el programa de guías de iptv-org
+        run: |
+          git clone --depth 1 -b master https://github.com/iptv-org/epg.git epg-src
+          cd epg-src && npm install --no-audit --no-fund
+      - name: Descargar la programación
+        working-directory: epg-src
+        continue-on-error: true
+        run: npm run grab --- --channels=../custom.channels.xml --output=../guide.xml --days=2 --maxConnections=10
+      - name: Convertir a JSON
         run: |
           mkdir -p epg
-          python3 scripts/epg_fetch.py epg/epg.json
+          python3 scripts/epg.py --convert guide.xml epg/epg.json
       - name: Guardar en el repositorio
         run: |
           git config user.name "cafetv-bot"
