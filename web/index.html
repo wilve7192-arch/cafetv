@@ -140,7 +140,7 @@ header h1 span{color:var(--txt)}
 var API='https://iptv-org.github.io/api/';
 var M3U='https://iptv-org.github.io/iptv/index.m3u';
 /* En una web https el navegador bloquea señales http; dentro de las apps (Fire TV / Samsung) se permiten todas */
-var VERSION='2026.11.21';
+var VERSION='2026.11.22';
 var PAGE=60, HTTPS_ONLY=location.protocol==='https:'&&!window.TV_APP&&!/[?&]app=1/.test(location.search);
 /* Canales que siempre aparecen primero */
 var FEATURED=[/^caracol tv/i,/^canal rcn/i,/^caracol internacional/i,/^canal 1$/i,/^se[ñn]al colombia/i,/^citytv/i,/^canal capital/i,/^teleantioquia/i,/^telecaf/i,/^telecaribe/i,/^telepac/i];
@@ -157,9 +157,15 @@ function getJSON(u){return fetch(u,{cache:'no-cache'}).then(function(r){if(!r.ok
 function okUrl(u){return !HTTPS_ONLY||u.indexOf('https:')===0}
 
 /* ---------- Carga de datos ---------- */
+/* Lista reducida (menos de 1 MB) que prepara GitHub dos veces al día; si falla, se usa la API completa (26 MB) */
+var SLIM_URL='https://wilve7192-arch.github.io/cafetv/data/api.json';
 function loadAPI(){
-  return Promise.all(['channels','streams','logos','countries','categories','feeds'].map(function(f){return getJSON(API+f+'.json').catch(function(e){if(f==='feeds')return [];throw e})}))
-  .then(function(r){
+  return getJSON(SLIM_URL+'?t='+Math.floor(Date.now()/36e5)).then(function(d){
+    if(!d.channels||Date.now()/60000-d.generated>4*24*60)throw 'vieja';
+    return [d.channels,d.streams,d.logos,d.countries,d.categories,d.feeds||[]];
+  }).catch(function(){
+    return Promise.all(['channels','streams','logos','countries','categories','feeds'].map(function(f){return getJSON(API+f+'.json').catch(function(e){if(f==='feeds')return [];throw e})}));
+  }).then(function(r){
     var ch={},logos={},out={};
     r[0].forEach(function(c){ch[c.id]=c});
     r[2].forEach(function(l){if(!logos[l.channel]||!l.feed)logos[l.channel]=l.url});
@@ -201,17 +207,19 @@ function loadM3U(){
 /* Copia local de Mi lista: la app abre al instante y se actualiza en segundo plano */
 function snapshot(){try{
   var keep=all.filter(function(c){return mine[c.id]||favs[c.id]}).map(function(c){return {id:c.id,name:c.name,logo:c.logo,country:c.country,cats:c.cats,alive:c.alive,
-    streams:c.streams.slice(0,8).map(function(x){return {url:x.url,h:x.h||0,q:x.q||'',official:x.official?1:0,ref:x.ref||'',ua:x.ua||''}})}});
+    streams:c.streams.slice(0,8).map(function(x){return {url:x.url,h:x.h||0,q:x.q||'',official:x.official?1:0,ok:x.ok?1:0,ref:x.ref||'',ua:x.ua||''}})}});
   save('cache',{t:Date.now(),v:VERSION,list:keep,co:Object.keys(coIds)})}catch(e){}}
 var fromCache=false;
 function start(){
   var cc=load('cache',null);
-  if(cc&&cc.list&&cc.list.length&&cc.v===VERSION&&!all.length){
+  if(cc&&cc.list&&cc.list.length&&!all.length){
     all=cc.list;mine={};all.forEach(function(c){mine[c.id]=1});coIds={};(cc.co||[]).forEach(function(id){coIds[id]=1});
     mineN=all.length;fromCache=true;
     var f=load('filters',null);if(f){st.country=f.country||'';st.cat=f.cat||''}
     apply();loadEPG();focusFirstCard();
   }
+  /* si la copia guardada tiene menos de 6 horas, no se vuelve a descargar todo (solo señales y programación) */
+  if(fromCache&&cc.v===VERSION&&Date.now()-cc.t<6*36e5){loadStatus();return}
   if(!fromCache)$('status').textContent='Cargando la lista más reciente de GitHub (iptv-org)…';
   var coP=fetch(CO_M3U,{cache:'no-cache'}).then(function(r){return r.ok?r.text():''}).catch(function(){return ''});
   loadAPI().catch(function(){return loadM3U()}).then(function(list){return coP.then(function(t){mergeCO(list,t);return list})}).then(function(list){
@@ -350,7 +358,7 @@ function mergeExtra(list){
     extraIds[c.id]=1});
 }
 /* ---------- Límite total: máximo 150 canales ---------- */
-var CUPOS=[['CO',45],['movies',30],['series',25],['kids',15],['sports',12],['documentary',5]];
+var CUPOS=[['CO',45],['movies',50],['series',25],['kids',15],['sports',12],['documentary',5]];
 var SIN=['music']; /* categorías eliminadas a pedido (también se quitan de Colombia) */
 var basePick={};
 function bucketOf(c){if(c.country==='CO')return 'CO';
@@ -409,10 +417,10 @@ function loadStatus(){getJSON(STATUS_URL+'?t='+Date.now()).then(function(d){
   var age=Date.now()/60000-d.generated;if(!d.ok||age>3*24*60)return;
   var ok={};d.ok.forEach(function(u){ok[u]=1});checked={age:age};
   all.forEach(function(c){var good=c.streams.filter(function(x){return ok[x.url]||x.official});
-    c.alive=good.length>0;
+    good.forEach(function(x){x.ok=1});c.alive=good.length>0;
     good.sort(function(a,b){return ((b.official?1:0)-(a.official?1:0))||((d.h&&d.h[b.url]||b.h||0)-(d.h&&d.h[a.url]||a.h||0))});
     if(good.length)c.streams=coIds[c.id]?good.concat(c.streams.filter(function(x){return good.indexOf(x)<0})):good; /* los de la lista de Colombia conservan todas sus fuentes */});
-  mine=limitar(basePick); /* con la revisión de señales, se eligen los 150 que funcionan */
+  if(Object.keys(basePick).length)mine=limitar(basePick); /* con la revisión de señales, se eligen los 150 que funcionan */
   mineN=all.filter(function(c){return mine[c.id]&&(c.alive||c.country==='CO'||coIds[c.id])}).length;snapshot();
   refreshKeep()}).catch(function(){})}
 
@@ -555,6 +563,9 @@ function pickSource(c,cb){
 function play(i,s){
   if(i<0)i=view.length-1;if(i>=view.length)i=0;
   var c=view[i];if(!c)return;
+  if(s===undefined){ /* fuente conocida que funciona: se abre directo, sin probar las demás */
+    var gi=-1;for(var q=0;q<c.streams.length;q++){var x0=c.streams[q];if(bad[x0.url])continue;if(x0.url===good[c.id]||x0.official||x0.ok){gi=q;break}}
+    if(gi>=0)s=gi}
   if(s===undefined&&c.streams.length>1){
     cur=i;srcIdx=0;if(scope!=='player')openedAt=Date.now();
     $('player').style.display='block';scope='player';banner(i);$('osd').classList.add('hide');
