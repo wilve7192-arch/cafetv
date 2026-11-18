@@ -44,7 +44,9 @@ def main(out):
                 cid = el.get('id') or ''
                 for dn in el.findall('display-name'):
                     if dn.text:
-                        nombres.setdefault(cid, set()).add(norm(dn.text))
+                        txt = re.sub(r'^[A-Z]{2}\s*-\s*', '', dn.text.strip())  # quita "CO - "
+                        nombres.setdefault(cid, set()).add(norm(txt))
+                nombres.setdefault(cid, set()).add(norm(cid.split('@')[0].split('.')[0]))
                 el.clear()
             elif el.tag == 'programme':
                 try:
