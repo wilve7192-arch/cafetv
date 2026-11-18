@@ -2,7 +2,7 @@ name: Comprobar canales de CaféTV
 
 on:
   schedule:
-    - cron: '41 9 * * *'   # todos los días (4:41 a. m. hora Colombia)
+    - cron: '41 9,21 * * *'   # dos veces al día (4:41 a. m. y p. m. hora Colombia)
   workflow_dispatch:
 
 permissions:
@@ -21,11 +21,15 @@ jobs:
         run: |
           mkdir -p status
           python3 scripts/check.py status/status.json
+      - name: Lista reducida para que la app abra rápido
+        run: |
+          mkdir -p data
+          python3 scripts/slim.py data/api.json
       - name: Guardar resultado
         run: |
           git config user.name "cafetv-bot"
           git config user.email "cafetv-bot@users.noreply.github.com"
-          git add status/status.json
+          git add status/status.json data/api.json
           git commit -m "Comprobación de canales" || echo "sin cambios"
           git pull --rebase
           git push
